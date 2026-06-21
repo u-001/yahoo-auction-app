@@ -186,6 +186,9 @@
     transition: background .12s;
   }
   .btn-primary:hover { background: var(--accent-hover); }
+  .btn-primary:disabled, .btn-secondary:disabled {
+    opacity: .4; cursor: not-allowed; pointer-events: none;
+  }
   .btn-secondary {
     background: var(--bg3); color: var(--text); border: 1.5px solid var(--border);
     border-radius: var(--radius); padding: 10px 22px;
@@ -407,6 +410,7 @@
     border: 2px solid var(--accent);
     background: var(--selected-bg);
   }
+  @keyframes export-spin { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
@@ -1003,7 +1007,10 @@
     </div>
     <div class="sec-sub">追加画像（11枚目以降）はDropboxの「追加画像一覧_URL発行済み_ヤフオク閲覧可能」配下に自動保存されます。</div>
     <div id="confirm-list"></div>
-    <div id="export-status" class="sec-sub hidden" style="color:var(--accent);font-weight:700;"></div>
+    <div id="export-status" class="hidden" style="display:flex;align-items:center;gap:10px;background:var(--accent-bg);border:1px solid var(--accent);border-radius:var(--radius-sm);padding:10px 12px;margin-top:12px;color:var(--accent);font-weight:700;font-size:.9rem;">
+      <span class="export-spinner" style="width:16px;height:16px;border:2px solid var(--accent);border-top-color:transparent;border-radius:50%;display:inline-block;animation:export-spin .7s linear infinite;flex-shrink:0;"></span>
+      <span id="export-status-text"></span>
+    </div>
     <div class="action-bar" style="margin-top:16px;">
       <button class="btn-primary" id="export-zip-btn" onclick="exportZip()">ZIP出力</button>
       <button class="btn-secondary" id="export-cancel-btn" onclick="closeOverlay()">キャンセル</button>
@@ -2507,6 +2514,15 @@ function asciiSafeJSON(obj){
   }
   return out;
 }
+// 一時的な通信エラー（瞬断・CORS errorとして見えるネットワーク断など）に備えて自動リトライする
+async function withRetry(fn, retries=2, delayMs=800){
+  let lastErr;
+  for(let i=0;i<=retries;i++){
+    try{ return await fn(); }
+    catch(e){ lastErr=e; if(i<retries) await new Promise(r=>setTimeout(r,delayMs)); }
+  }
+  throw lastErr;
+}
 async function dropboxUploadFile(path, blob, token){
   const res = await fetch('https://content.dropboxapi.com/2/files/upload', {
     method:'POST',
@@ -2554,9 +2570,9 @@ async function uploadExtraImagesAndGetLink(item){
     const origName=names[i] ? names[i].replace(/\.[^.]+$/,'') : `extra${i+1}`;
     const safeName=origName.replace(/[\\/:*?"<>|]/g,'_');
     const filename=`${noStr}_${i+11}_${safeName}.${ext}`;
-    await dropboxUploadFile(`${folderPath}/${filename}`, blob, token);
+    await withRetry(()=>dropboxUploadFile(`${folderPath}/${filename}`, blob, token));
   }
-  return await dropboxGetOrCreateSharedLink(folderPath, token);
+  return await withRetry(()=>dropboxGetOrCreateSharedLink(folderPath, token));
 }
 // item.descに仕込まれたDropboxプレースホルダーを実際のURLに差し替え（URLなしの場合はブロック自体を削除）
 function finalizeDescriptionWithDropboxUrl(desc, url){
@@ -2568,9 +2584,10 @@ function finalizeDescriptionWithDropboxUrl(desc, url){
 let isExporting = false;
 function setExportStatus(text){
   const el = document.getElementById('export-status');
-  if(!el) return;
-  if(text){ el.textContent = text; el.classList.remove('hidden'); }
-  else { el.textContent=''; el.classList.add('hidden'); }
+  const textEl = document.getElementById('export-status-text');
+  if(!el || !textEl) return;
+  if(text){ textEl.textContent = text; el.classList.remove('hidden'); }
+  else { textEl.textContent=''; el.classList.add('hidden'); }
 }
 function setExportButtonsDisabled(disabled){
   const zipBtn = document.getElementById('export-zip-btn');
