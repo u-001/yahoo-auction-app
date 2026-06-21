@@ -411,6 +411,23 @@
     background: var(--selected-bg);
   }
   @keyframes export-spin { to { transform: rotate(360deg); } }
+  /* 自動で消えるトースト通知 */
+  #toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: var(--success); color: #fff; font-weight: 700;
+    padding: 12px 16px; border-radius: var(--radius);
+    box-shadow: 0 8px 24px rgba(0,0,0,.3);
+    z-index: 500; max-width: 90%;
+    display: flex; align-items: center; gap: 14px;
+  }
+  #toast.hidden { display: none; }
+  #toast button {
+    background: rgba(255,255,255,.25); color: #fff; border: none;
+    border-radius: var(--radius-sm); padding: 5px 14px;
+    font-size: .85rem; font-weight: 700; cursor: pointer; font-family: inherit;
+    flex-shrink: 0;
+  }
+  #toast button:hover { background: rgba(255,255,255,.4); }
 </style>
 </head>
 <body>
@@ -1032,6 +1049,12 @@
       <button class="btn-secondary" onclick="closeDropboxSetup()">あとで（次回も表示）</button>
     </div>
   </div>
+</div>
+
+<!-- 自動で消えるトースト通知 -->
+<div id="toast" class="hidden">
+  <span id="toast-text"></span>
+  <button type="button" onclick="hideToast()">OK</button>
 </div>
 
 <script>
@@ -2610,6 +2633,19 @@ function finalizeDescriptionWithDropboxUrl(desc, url){
   return url ? desc.replace(block, block.replace(DROPBOX_EXTRA_PLACEHOLDER, url)) : desc.replace(block, '');
 }
 
+// 一定時間後に自動で消える通知（OKボタンでも即時に閉じられる）
+let toastTimer = null;
+function showToast(text, durationMs = 15000){
+  document.getElementById('toast-text').textContent = text;
+  document.getElementById('toast').classList.remove('hidden');
+  if(toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(hideToast, durationMs);
+}
+function hideToast(){
+  document.getElementById('toast').classList.add('hidden');
+  if(toastTimer){ clearTimeout(toastTimer); toastTimer=null; }
+}
+
 let isExporting = false;
 function setExportStatus(text){
   const el = document.getElementById('export-status');
@@ -2686,7 +2722,7 @@ async function exportZip(){
   closeOverlay();
   renderItemList();
   saveStorage();
-  alert('ZIP出力が完了しました。');
+  showToast('ZIP出力が完了しました。', 15000);
   } finally {
     isExporting = false;
     setExportButtonsDisabled(false);
