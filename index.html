@@ -1296,10 +1296,6 @@ function restoreUI(){
 // ===== TYPE =====
 function setType(t, silent){
   state.type = t;
-  document.querySelectorAll('#type-btns button').forEach((b,i)=>{
-    const types=['tire','wheel','set','cap'];
-    b.classList.toggle('selected', types[i]===t);
-  });
   const hasTire = t==='tire'||t==='set';
   const hasWheel = t==='wheel'||t==='set';
   const isCap = t==='cap';
@@ -1312,7 +1308,13 @@ function setType(t, silent){
   toggle('preview-sec', true);
   document.getElementById('qty-label').textContent = isCap ? '枚数 *' : '本数 *';
   updateQtyBtns();
-  if(!silent){ resetFormData(); }
+  // 出品タイプ切替時は画像はそのまま保持する（タイプ別の入力項目だけリセット）
+  if(!silent){ resetFormData(true); }
+  // resetFormDataがボタンの選択状態を一旦クリアするため、出品タイプの選択表示は最後に適用する
+  document.querySelectorAll('#type-btns button').forEach((b,i)=>{
+    const types=['tire','wheel','set','cap'];
+    b.classList.toggle('selected', types[i]===t);
+  });
   updatePreview();
   saveStorage();
 }
@@ -2375,7 +2377,7 @@ function cancelEditItem(){
 }
 
 // ===== FORM RESET =====
-function resetFormData(){
+function resetFormData(keepImages){
   // Reset inputs but keep type
   document.getElementById('f-brand').value='';
   document.getElementById('f-wheel-brand').value='';
@@ -2432,10 +2434,12 @@ function resetFormData(){
   clearErrors();
   document.getElementById('f-date').value=todayStr;
   document.getElementById('no-badge').textContent='出品No. '+String(state.nextNo).padStart(2,'0');
-  state.mainImages=[];
-  state.additionalImages=[];
-  renderImagePreview('main');
-  renderImagePreview('additional');
+  if(!keepImages){
+    state.mainImages=[];
+    state.additionalImages=[];
+    renderImagePreview('main');
+    renderImagePreview('additional');
+  }
   updatePreview();
 }
 function resetForm(){
@@ -2492,12 +2496,22 @@ function updateDropboxTokenStatus(){
     ? 'トークン設定済み（追加画像はDropboxへアップロードされます）'
     : '未設定（追加画像がある場合もDropboxリンクなしで出力されます）';
 }
+// HTTPヘッダーはASCII(ISO-8859-1)のみ許可されるため、日本語等の非ASCII文字は\uXXXXにエスケープする（Dropbox公式の仕様）
+function asciiSafeJSON(obj){
+  let out = '';
+  const s = JSON.stringify(obj);
+  for (let i = 0; i < s.length; i++) {
+    const code = s.charCodeAt(i);
+    out += code > 127 ? ('\\u' + code.toString(16).padStart(4, '0')) : s[i];
+  }
+  return out;
+}
 async function dropboxUploadFile(path, blob, token){
   const res = await fetch('https://content.dropboxapi.com/2/files/upload', {
     method:'POST',
     headers:{
       'Authorization':'Bearer '+token,
-      'Dropbox-API-Arg':JSON.stringify({path, mode:'add', autorename:true, mute:true}),
+      'Dropbox-API-Arg':asciiSafeJSON({path, mode:'add', autorename:true, mute:true}),
       'Content-Type':'application/octet-stream'
     },
     body: blob
