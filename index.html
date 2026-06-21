@@ -1001,11 +1001,12 @@
       <button type="button" onclick="toggleSelectAllConfirm(true)">全選択</button>
       <button type="button" onclick="toggleSelectAllConfirm(false)">全解除</button>
     </div>
-    <div class="sec-sub">追加画像（11枚目以降）はDropboxの「静岡_全件/追加画像一覧_URL発行済み_ヤフオク閲覧可能」配下に自動保存されます。</div>
+    <div class="sec-sub">追加画像（11枚目以降）はDropboxの「追加画像一覧_URL発行済み_ヤフオク閲覧可能」配下に自動保存されます。</div>
     <div id="confirm-list"></div>
+    <div id="export-status" class="sec-sub hidden" style="color:var(--accent);font-weight:700;"></div>
     <div class="action-bar" style="margin-top:16px;">
-      <button class="btn-primary" onclick="exportZip()">ZIP出力</button>
-      <button class="btn-secondary" onclick="closeOverlay()">キャンセル</button>
+      <button class="btn-primary" id="export-zip-btn" onclick="exportZip()">ZIP出力</button>
+      <button class="btn-secondary" id="export-cancel-btn" onclick="closeOverlay()">キャンセル</button>
     </div>
   </div>
 </div>
@@ -2535,7 +2536,7 @@ async function dropboxGetOrCreateSharedLink(folderPath, token){
   throw new Error('Dropbox共有リンクの取得に失敗しました');
 }
 // 追加画像（11枚目以降）の保存先（フォルダ名が変わる場合はここだけ書き換える）
-const DROPBOX_EXTRA_BASE_PATH = '/静岡_全件/追加画像一覧_URL発行済み_ヤフオク閲覧可能';
+const DROPBOX_EXTRA_BASE_PATH = '/追加画像一覧_URL発行済み_ヤフオク閲覧可能';
 // 追加画像（11枚目以降）をDropboxへアップロードし、フォルダの閲覧用共有リンクを返す
 async function uploadExtraImagesAndGetLink(item){
   const token=getDropboxToken();
@@ -2564,7 +2565,21 @@ function finalizeDescriptionWithDropboxUrl(desc, url){
   return url ? desc.replace(block, block.replace(DROPBOX_EXTRA_PLACEHOLDER, url)) : desc.replace(block, '');
 }
 
+let isExporting = false;
+function setExportStatus(text){
+  const el = document.getElementById('export-status');
+  if(!el) return;
+  if(text){ el.textContent = text; el.classList.remove('hidden'); }
+  else { el.textContent=''; el.classList.add('hidden'); }
+}
+function setExportButtonsDisabled(disabled){
+  const zipBtn = document.getElementById('export-zip-btn');
+  const cancelBtn = document.getElementById('export-cancel-btn');
+  if(zipBtn) zipBtn.disabled = disabled;
+  if(cancelBtn) cancelBtn.disabled = disabled;
+}
 async function exportZip(){
+  if(isExporting) return; // ボタン連打防止
   const checkedNos = Array.from(document.querySelectorAll('.confirm-check:checked')).map(c=>parseInt(c.value,10));
   if(!checkedNos.length){ alert('ZIP出力する商品を選択してください。'); return; }
   const targets = state.items.filter(it=>checkedNos.includes(it.no));
@@ -2574,19 +2589,26 @@ async function exportZip(){
     const nosStr = noImageTargets.map(it=>'No.'+String(it.no).padStart(2,'0')).join('、');
     if(!confirm(`${nosStr} は画像がアップロードされていません。このままZIPを作成しますか？`)) return;
   }
+  isExporting = true;
+  setExportButtonsDisabled(true);
+  try{
   // JSZip CDN
   if(typeof JSZip==='undefined'){
+    setExportStatus('準備中...');
     const s=document.createElement('script'); s.src='https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
     document.head.appendChild(s);
     await new Promise(r=>s.onload=r);
   }
   // 選択された商品ごとに個別ZIPを生成してダウンロード（11枚目以降の画像はZIPとは別にDropboxへアップロード）
   for(const item of targets){
+    const noStr = String(item.no).padStart(2,'0');
     let extraUrl=null;
     if((item.imagesAdditionalData||[]).length){
+      setExportStatus(`No.${noStr} の追加画像をDropboxにアップロード中...`);
       try{ extraUrl = await uploadExtraImagesAndGetLink(item); }
-      catch(e){ alert(`No.${String(item.no).padStart(2,'0')} の追加画像のDropboxアップロードに失敗しました。追加画像リンクなしで出力します。\n${e.message}`); }
+      catch(e){ alert(`No.${noStr} の追加画像のDropboxアップロードに失敗しました。追加画像リンクなしで出力します。\n${e.message}`); }
     }
+    setExportStatus(`No.${noStr} のZIPを作成中...`);
     const itemForCsv = {...item, desc: finalizeDescriptionWithDropboxUrl(item.desc, extraUrl)};
     const zip=new JSZip();
     const csvRow=buildCSV(itemForCsv);
@@ -2618,6 +2640,11 @@ async function exportZip(){
   closeOverlay();
   renderItemList();
   saveStorage();
+  } finally {
+    isExporting = false;
+    setExportButtonsDisabled(false);
+    setExportStatus(null);
+  }
 }
 
 function buildCSVHeader(){
