@@ -1881,7 +1881,7 @@ function buildDescription(no){
     const cond=getStatusWord();
     const newOld=isNew()?'新品':'中古';
     const tireNote=v('f-tire-note');
-    let condBlock=`■ 状態：${cond}（${dmg}）<BR>\n※ 目視による検品です。<BR>\n※ 商品画像もあわせて参照ください。<BR>\n`;
+    let condBlock=`■ 状態：${cond}${dmg?`（${dmg}）`:''}<BR>\n※ 目視による検品です。<BR>\n※ 商品画像もあわせて参照ください。<BR>\n`;
     if(newOld==='中古') condBlock+=`※ 中古品のため、落としきれていない汚れがございますが、ブラッシングのみの簡易清掃をしてあります。<BR>\n※ 中古品のため、写真では撮りきれていないシワや傷等がある場合がございます。<BR>\n`;
     else condBlock+=`※ 落としきれていない汚れがある場合がございますが、ブラッシングのみの簡易清掃をしてあります。<BR>\n※ 写真では撮りきれていないシワや傷等がある場合がございます。<BR>\n`;
     condBlock+=`※ トレッドに小石等の異物が挟まっている場合がございます。<BR><BR><BR>\n`;
@@ -1899,7 +1899,7 @@ function buildDescription(no){
     const dmg=getWheelDamage();
     const cond=getStatusWord(); const newOld=isNew()?'新品':'中古';
     let hubLine=hub?`■ ハブ径(mm)：約${hub}<BR><BR><BR>\n`:'';
-    let condBlock=`■ 状態：${cond}（${dmg}）<BR>\n※ 目視による検品です。<BR>\n※ 商品画像もあわせて参照ください。<BR>\n`;
+    let condBlock=`■ 状態：${cond}${dmg?`（${dmg}）`:''}<BR>\n※ 目視による検品です。<BR>\n※ 商品画像もあわせて参照ください。<BR>\n`;
     if(newOld==='中古') condBlock+=`※ 中古品のため、若干の腐食、キズ、汚れがございます。<BR>\n※ 中古品のため、写真では撮りきれていないシワや傷等がある場合がございます。<BR>\n`;
     else condBlock+=`※ 若干の腐食、キズ、汚れがある場合がございます。<BR>\n※ 写真では撮りきれていないシワや傷等がある場合がございます。<BR>\n`;
     condBlock+=`※ 不織布による拭き取りのみの簡易清掃はしてあります。<BR><BR><BR>\n`;
@@ -1920,11 +1920,11 @@ function buildDescription(no){
     const pcdVal=state.pcd==='その他'? v('f-pcd-other') : (state.pcd||'');
     const offset=(state.offsetSign==='+'?'+':'-')+v('f-offset');
     let hubLine=hub?`■ ハブ径(mm)：約${hub}<BR><BR><BR>\n`:'';
-    let tireCond=`■ 状態：${cond}（${tireDmg}）<BR>\n※ 目視による検品です。<BR>\n※ 商品画像もあわせて参照ください。<BR>\n`;
+    let tireCond=`■ 状態：${cond}${tireDmg?`（${tireDmg}）`:''}<BR>\n※ 目視による検品です。<BR>\n※ 商品画像もあわせて参照ください。<BR>\n`;
     if(newOld==='中古') tireCond+=`※ 中古品のため、落としきれていない汚れがございますが、ブラッシングのみの簡易清掃をしてあります。<BR>\n※ 中古品のため、写真では撮りきれていないシワや傷等がある場合がございます。<BR>\n`;
     else tireCond+=`※ 落としきれていない汚れがある場合がございますが、ブラッシングのみの簡易清掃をしてあります。<BR>\n※ 写真では撮りきれていないシワや傷等がある場合がございます。<BR>\n`;
     tireCond+=`※ トレッドに小石等の異物が挟まっている場合がございます。<BR><BR><BR>\n`;
-    let wheelCond=`■ 状態：${cond}（${wheelDmg}）<BR>\n※ 目視による検品です。<BR>\n※ 商品画像もあわせて参照ください。<BR>\n`;
+    let wheelCond=`■ 状態：${cond}${wheelDmg?`（${wheelDmg}）`:''}<BR>\n※ 目視による検品です。<BR>\n※ 商品画像もあわせて参照ください。<BR>\n`;
     if(newOld==='中古') wheelCond+=`※ 中古品のため、若干の腐食、キズ、汚れがございます。<BR>\n※ 中古品のため、写真では撮りきれていないシワや傷等がある場合がございます。<BR>\n`;
     else wheelCond+=`※ 若干の腐食、キズ、汚れがある場合がございます。<BR>\n※ 写真では撮りきれていないシワや傷等がある場合がございます。<BR>\n`;
     wheelCond+=`※ 不織布による拭き取りのみの簡易清掃はしてあります。<BR><BR><BR>\n`;
@@ -2657,6 +2657,7 @@ async function exportZip(){
   closeOverlay();
   renderItemList();
   saveStorage();
+  alert('ZIP出力が完了しました。');
   } finally {
     isExporting = false;
     setExportButtonsDisabled(false);
