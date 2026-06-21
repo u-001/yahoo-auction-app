@@ -206,12 +206,12 @@
   /* Hidden */
   .hidden { display: none !important; }
   /* Overlay confirm */
-  #overlay {
+  #overlay, #dropbox-setup-overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,.6);
     display: flex; align-items: center; justify-content: center; z-index: 200;
   }
-  #overlay.hidden { display: none; }
-  #overlay-box {
+  #overlay.hidden, #dropbox-setup-overlay.hidden { display: none; }
+  #overlay-box, #dropbox-setup-box {
     background: var(--bg2); border: 1px solid var(--border);
     border-radius: 12px; padding: 24px; max-width: 560px; width: 95%;
     max-height: 80vh; overflow-y: auto;
@@ -1018,6 +1018,22 @@
   </div>
 </div>
 
+<!-- Dropbox初回設定モーダル：トークン未設定のときだけ表示 -->
+<div id="dropbox-setup-overlay" class="hidden">
+  <div id="dropbox-setup-box">
+    <h3>Dropbox連携の設定</h3>
+    <p style="font-size:.85rem;color:var(--text2);margin-bottom:14px;">追加画像（11枚目以降）をDropboxに自動保存するには、アクセストークンの登録が必要です。一度登録すれば、この端末では次回以降表示されません。</p>
+    <div class="field">
+      <label>アクセストークン</label>
+      <input type="password" id="dropbox-setup-input" placeholder="Dropboxアクセストークンを貼り付け">
+    </div>
+    <div class="action-bar">
+      <button class="btn-primary" onclick="saveDropboxTokenFromSetup()">保存</button>
+      <button class="btn-secondary" onclick="closeDropboxSetup()">あとで（次回も表示）</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ===== STATE =====
 const today = new Date();
@@ -1265,6 +1281,7 @@ window.onload = () => {
   updateQtyBtns();
   initImageUpload();
   updateDropboxTokenStatus();
+  checkDropboxTokenSetup();
 };
 
 function buildWheelInchSelect(){
@@ -2490,19 +2507,31 @@ function toggleSelectAllConfirm(checked){
 
 // ===== DROPBOX連携（追加画像11枚目以降） =====
 function getDropboxToken(){ return localStorage.getItem('yauction_dropbox_token')||''; }
-function saveDropboxToken(){
-  const val=document.getElementById('f-dropbox-token').value.trim();
-  if(val) localStorage.setItem('yauction_dropbox_token', val);
-  else localStorage.removeItem('yauction_dropbox_token');
-  document.getElementById('f-dropbox-token').value='';
-  updateDropboxTokenStatus();
-}
 function updateDropboxTokenStatus(){
   const el=document.getElementById('dropbox-token-status');
   if(!el) return;
   el.textContent = getDropboxToken()
     ? 'トークン設定済み（追加画像はDropboxへアップロードされます）'
     : '未設定（追加画像がある場合もDropboxリンクなしで出力されます）';
+}
+// トークン未設定の端末でだけ初回設定ポップアップを表示する
+function checkDropboxTokenSetup(){
+  if(!getDropboxToken()){
+    document.getElementById('dropbox-setup-overlay').classList.remove('hidden');
+  }
+}
+function saveDropboxTokenFromSetup(){
+  const input=document.getElementById('dropbox-setup-input');
+  const val=input.value.trim();
+  if(!val){ alert('トークンを入力してください。'); return; }
+  localStorage.setItem('yauction_dropbox_token', val);
+  input.value='';
+  document.getElementById('dropbox-setup-overlay').classList.add('hidden');
+  updateDropboxTokenStatus();
+  alert('Dropboxトークンを保存しました。この端末では次回以降表示されません。');
+}
+function closeDropboxSetup(){
+  document.getElementById('dropbox-setup-overlay').classList.add('hidden');
 }
 // HTTPヘッダーはASCII(ISO-8859-1)のみ許可されるため、日本語等の非ASCII文字は\uXXXXにエスケープする（Dropbox公式の仕様）
 function asciiSafeJSON(obj){
@@ -2976,11 +3005,15 @@ document.getElementById('preview-overlay').addEventListener('click',(e)=>{
 document.getElementById('overlay').addEventListener('click',(e)=>{
   if(e.target.id==='overlay') closeOverlay();
 });
+document.getElementById('dropbox-setup-overlay').addEventListener('click',(e)=>{
+  if(e.target.id==='dropbox-setup-overlay') closeDropboxSetup();
+});
 document.addEventListener('keydown',(e)=>{
   if(e.key!=='Escape') return;
   if(!document.getElementById('edit-overlay').classList.contains('hidden')) cancelEditItem();
   else if(!document.getElementById('preview-overlay').classList.contains('hidden')) closePreview();
   else if(!document.getElementById('overlay').classList.contains('hidden')) closeOverlay();
+  else if(!document.getElementById('dropbox-setup-overlay').classList.contains('hidden')) closeDropboxSetup();
 });
 </script>
 </body>
