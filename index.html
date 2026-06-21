@@ -3051,6 +3051,10 @@ document.addEventListener('keydown',(e)=>{
   else if(!document.getElementById('overlay').classList.contains('hidden')) closeOverlay();
   else if(!document.getElementById('dropbox-setup-overlay').classList.contains('hidden')) closeDropboxSetup();
 });
+// トースト：画面のどこをクリック/タップしても閉じる（OKボタン・15秒タイマーに加えてのフォールバック）
+document.addEventListener('click', () => {
+  if(!document.getElementById('toast').classList.contains('hidden')) hideToast();
+}, true);
 </script>
 </body>
 </html>
