@@ -411,6 +411,12 @@
     background: var(--selected-bg);
   }
   @keyframes export-spin { to { transform: rotate(360deg); } }
+  /* 送信中はフォーム全体を操作不可・薄暗くする */
+  #form-section.form-disabled {
+    opacity: .55;
+    pointer-events: none;
+    user-select: none;
+  }
   /* 自動で消えるトースト通知 */
   #toast {
     position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
@@ -2083,6 +2089,9 @@ function validate(){
 
 // ===== ADD ITEM =====
 let isSubmittingItem = false;
+function setFormSubmittingUI(submitting){
+  document.getElementById('form-section').classList.toggle('form-disabled', submitting);
+}
 async function addItem(){
   if(isSubmittingItem) return; // 二重送信防止
   if(!state.type){ alert('出品タイプを選択してください'); return; }
@@ -2092,6 +2101,7 @@ async function addItem(){
   const addBtnLabel0=addBtn0.textContent;
   addBtn0.disabled = true;
   addBtn0.textContent = '送信中...';
+  setFormSubmittingUI(true);
   try{
   const no=state.nextNo;
   state.nextNo++;
@@ -2129,6 +2139,7 @@ async function addItem(){
   } finally {
     isSubmittingItem = false;
     addBtn0.disabled = false;
+    setFormSubmittingUI(false);
   }
 }
 
@@ -2141,6 +2152,7 @@ async function updateItem(){
   const updBtn0=document.getElementById('add-update-btn');
   updBtn0.disabled = true;
   updBtn0.textContent = '送信中...';
+  setFormSubmittingUI(true);
   try{
   const item=state.items[idx];
   item.title=document.getElementById('f-title').value;
@@ -2173,6 +2185,7 @@ async function updateItem(){
   } finally {
     isSubmittingItem = false;
     updBtn0.disabled = false;
+    setFormSubmittingUI(false);
   }
 }
 
