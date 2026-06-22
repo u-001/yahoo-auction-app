@@ -2549,7 +2549,7 @@ function resetForm(){
   if(!confirm('フォームをリセットしますか？')) return;
   resetFormData();
 }
-function resetAllData(){
+async function resetAllData(){
   if(!confirm('フォームと商品リストのすべてのデータを初期化します。商品リストは全員で共有されているため、他の人の画面からも消えます。この操作は元に戻せません。よろしいですか？')) return;
   const nosToDelete = state.items.map(it=>it.no);
   state.items=[];
@@ -2562,8 +2562,9 @@ function resetAllData(){
   resetFormData();
   renderItemList();
   saveStorage();
-  nosToDelete.forEach(no=>deleteSharedItem(no));
-  saveSharedMeta();
+  // 共有データへの削除は同時に投げず、1件ずつ順番に処理する（meta書き込みの衝突を避けるため）
+  for(const no of nosToDelete){ await deleteSharedItem(no); }
+  await saveSharedMeta();
 }
 
 // ===== ZIP EXPORT =====
