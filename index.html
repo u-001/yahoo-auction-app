@@ -2082,9 +2082,17 @@ function validate(){
 }
 
 // ===== ADD ITEM =====
+let isSubmittingItem = false;
 async function addItem(){
+  if(isSubmittingItem) return; // 二重送信防止
   if(!state.type){ alert('出品タイプを選択してください'); return; }
   if(!validate()) { document.querySelector('.has-error')?.scrollIntoView({behavior:'smooth',block:'center'}); return; }
+  isSubmittingItem = true;
+  const addBtn0=document.getElementById('add-update-btn');
+  const addBtnLabel0=addBtn0.textContent;
+  addBtn0.disabled = true;
+  addBtn0.textContent = '送信中...';
+  try{
   const no=state.nextNo;
   state.nextNo++;
   state.usedNos.push(no);
@@ -2118,12 +2126,22 @@ async function addItem(){
   await saveSharedMeta();
   alert(`出品No.${String(no).padStart(2,'0')} を追加しました。`);
   resetFormData();
+  } finally {
+    isSubmittingItem = false;
+    addBtn0.disabled = false;
+  }
 }
 
 async function updateItem(){
+  if(isSubmittingItem) return; // 二重送信防止
   const idx=state.editingIdx;
   if(idx===undefined||idx===null) return;
   if(!validate()) { document.querySelector('.has-error')?.scrollIntoView({behavior:'smooth',block:'center'}); return; }
+  isSubmittingItem = true;
+  const updBtn0=document.getElementById('add-update-btn');
+  updBtn0.disabled = true;
+  updBtn0.textContent = '送信中...';
+  try{
   const item=state.items[idx];
   item.title=document.getElementById('f-title').value;
   item.desc=buildDescription(item.no);
@@ -2152,6 +2170,10 @@ async function updateItem(){
   addBtn.onclick=addItem;
   alert(`No.${String(item.no).padStart(2,'0')} を更新しました。`);
   resetFormData();
+  } finally {
+    isSubmittingItem = false;
+    updBtn0.disabled = false;
+  }
 }
 
 function captureFormData(){
