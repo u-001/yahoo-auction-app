@@ -417,6 +417,36 @@
     pointer-events: none;
     user-select: none;
   }
+  /* 送信中：画面全体を覆って操作不可にするオーバーレイ */
+  #submitting-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.55);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 600;
+  }
+  #submitting-overlay.hidden { display: none; }
+  #submitting-box {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 12px; padding: 28px 36px;
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+    box-shadow: 0 12px 48px rgba(0,0,0,.45);
+  }
+  #submitting-box .submitting-spinner {
+    width: 28px; height: 28px; border: 3px solid var(--accent);
+    border-top-color: transparent; border-radius: 50%;
+    animation: export-spin .7s linear infinite;
+  }
+  #submitting-box .submitting-text { font-size: .95rem; font-weight: 700; color: var(--text); }
+  /* 商品リスト：送信中の行 */
+  .item-row.item-pending { opacity: .65; cursor: default; }
+  .item-pending-badge {
+    display: flex; align-items: center; gap: 6px;
+    font-size: .8rem; color: var(--accent); font-weight: 700; white-space: nowrap;
+  }
+  .item-pending-badge .pending-spinner {
+    width: 13px; height: 13px; border: 2px solid var(--accent);
+    border-top-color: transparent; border-radius: 50%;
+    animation: export-spin .7s linear infinite; flex-shrink: 0;
+  }
   /* 自動で消えるトースト通知 */
   #toast {
     position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
@@ -1061,6 +1091,14 @@
 <div id="toast" class="hidden">
   <span id="toast-text"></span>
   <button type="button" onclick="hideToast()">OK</button>
+</div>
+
+<!-- 送信中：画面全体を覆って操作不可にするオーバーレイ -->
+<div id="submitting-overlay" class="hidden">
+  <div id="submitting-box">
+    <span class="submitting-spinner"></span>
+    <span class="submitting-text" id="submitting-text">送信中...</span>
+  </div>
 </div>
 
 <script>
@@ -2092,6 +2130,14 @@ let isSubmittingItem = false;
 function setFormSubmittingUI(submitting){
   document.getElementById('form-section').classList.toggle('form-disabled', submitting);
 }
+// 送信中：画面全体を覆って操作不可にする
+function showSubmittingOverlay(text){
+  document.getElementById('submitting-text').textContent = text || '送信中...';
+  document.getElementById('submitting-overlay').classList.remove('hidden');
+}
+function hideSubmittingOverlay(){
+  document.getElementById('submitting-overlay').classList.add('hidden');
+}
 async function addItem(){
   if(isSubmittingItem) return; // 二重送信防止
   if(!state.type){ alert('出品タイプを選択してください'); return; }
@@ -2102,6 +2148,7 @@ async function addItem(){
   addBtn0.disabled = true;
   addBtn0.textContent = '送信中...';
   setFormSubmittingUI(true);
+  showSubmittingOverlay('商品を送信中...');
   try{
   const no=state.nextNo;
   state.nextNo++;
@@ -2121,7 +2168,8 @@ async function addItem(){
     priceLabel, condition:state.sel['cond'],
     carrier:state.carrier, size3:state.size3, kuchi:state.kuchi,
     capCarrier:state.sel['cap-carrier'],
-    mgmtNo:getMgmtNo(no)
+    mgmtNo:getMgmtNo(no),
+    pending:true
   };
   // store snapshot of uploaded image filenames (main 1-10)
   item.imagesMain = (state.mainImages||[]).map(im => im.name || '');
@@ -2134,12 +2182,16 @@ async function addItem(){
   saveStorage();
   await saveSharedItem(item);
   await saveSharedMeta();
+  item.pending = false;
+  renderItemList();
+  saveStorage();
   alert(`出品No.${String(no).padStart(2,'0')} を追加しました。`);
   resetFormData();
   } finally {
     isSubmittingItem = false;
     addBtn0.disabled = false;
     setFormSubmittingUI(false);
+    hideSubmittingOverlay();
   }
 }
 
@@ -2153,6 +2205,7 @@ async function updateItem(){
   updBtn0.disabled = true;
   updBtn0.textContent = '送信中...';
   setFormSubmittingUI(true);
+  showSubmittingOverlay('商品を送信中...');
   try{
   const item=state.items[idx];
   item.title=document.getElementById('f-title').value;
@@ -2173,9 +2226,12 @@ async function updateItem(){
   // update image data snapshots
   item.imagesMainData = (state.mainImages||[]).map(im => im.src || '');
   item.imagesAdditionalData = (state.additionalImages||[]).map(im => im.src || '');
+  item.pending = true;
   state.editingIdx=null;
   renderItemList(); saveStorage();
   await saveSharedItem(item);
+  item.pending = false;
+  renderItemList(); saveStorage();
   // ボタンを元に戻す
   const addBtn=document.getElementById('add-update-btn');
   addBtn.textContent='商品リストに追加';
@@ -2186,6 +2242,7 @@ async function updateItem(){
     isSubmittingItem = false;
     updBtn0.disabled = false;
     setFormSubmittingUI(false);
+    hideSubmittingOverlay();
   }
 }
 
@@ -2234,7 +2291,20 @@ function renderItemList(){
   if(!state.items.length){ wrap.innerHTML='<p style="color:var(--text2);font-size:.85rem;">まだ商品がありません。</p>'; return; }
   wrap.innerHTML='';
   state.items.forEach((item,idx)=>{
-    const row=document.createElement('div'); row.className='item-row'; row.draggable=true;
+    const row=document.createElement('div'); row.className='item-row';
+    // 送信中（保存処理がまだ完了していない）商品は、プレビュー・編集・削除・並び替えをできないようにする
+    if(item.pending){
+      row.classList.add('item-pending');
+      row.draggable=false;
+      row.innerHTML=`
+        <span class="item-no">No.${String(item.no).padStart(2,'0')}</span>
+        <span class="item-type">${item.typeLabel||''}</span>
+        <span class="item-title" title="${item.title||''}">${item.title||'（タイトル未設定）'}</span>
+        <span class="item-pending-badge"><span class="pending-spinner"></span>送信中...</span>`;
+      wrap.appendChild(row);
+      return;
+    }
+    row.draggable=true;
     const zippedBadge = item.zipped ? `<span class="item-type" style="color:var(--success);font-weight:700;">ZIP作成済み</span>` : '';
     const editBtn = item.zipped ? '' : `<button onclick="editItem(${idx})">編集</button>`;
     row.innerHTML=`
@@ -2562,9 +2632,14 @@ async function resetAllData(){
   resetFormData();
   renderItemList();
   saveStorage();
-  // 共有データへの削除は同時に投げず、1件ずつ順番に処理する（meta書き込みの衝突を避けるため）
-  for(const no of nosToDelete){ await deleteSharedItem(no); }
-  await saveSharedMeta();
+  showSubmittingOverlay('初期化中...');
+  try{
+    // 共有データへの削除は同時に投げず、1件ずつ順番に処理する（meta書き込みの衝突を避けるため）
+    for(const no of nosToDelete){ await deleteSharedItem(no); }
+    await saveSharedMeta();
+  } finally {
+    hideSubmittingOverlay();
+  }
 }
 
 // ===== ZIP EXPORT =====
