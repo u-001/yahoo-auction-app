@@ -1305,6 +1305,11 @@ window.onload = () => {
   initImageUpload();
   updateDropboxTokenStatus();
   checkDropboxTokenSetup();
+  // 共有の商品リストを取得し、ローカルの一覧を最新の内容に置き換える
+  loadSharedItems().then(()=>{
+    renderItemList();
+    document.getElementById('no-badge').textContent='出品No. '+String(state.nextNo).padStart(2,'0');
+  });
 };
 
 function buildWheelInchSelect(){
@@ -2090,7 +2095,7 @@ function addItem(){
   const typeLabel={'tire':'タイヤのみ','wheel':'ホイールのみ','set':'セット','cap':'キャップ'}[state.type];
   const formData=captureFormData();
   const item={
-    no, type:state.type, typeLabel, title, desc, formData,
+    no, order:no, type:state.type, typeLabel, title, desc, formData,
     date:v('f-date'),
     startPrice:v('f-start-price'), buynowPrice:v('f-buynow-price'),
     fixedPrice:v('f-fixed-price'),
@@ -2109,6 +2114,8 @@ function addItem(){
   state.items.push(item);
   renderItemList();
   saveStorage();
+  saveSharedItem(item);
+  saveSharedMeta();
   alert(`出品No.${String(no).padStart(2,'0')} を追加しました。`);
   resetFormData();
 }
@@ -2138,6 +2145,7 @@ function updateItem(){
   item.imagesAdditionalData = (state.additionalImages||[]).map(im => im.src || '');
   state.editingIdx=null;
   renderItemList(); saveStorage();
+  saveSharedItem(item);
   // ボタンを元に戻す
   const addBtn=document.getElementById('add-update-btn');
   addBtn.textContent='商品リストに追加';
@@ -2209,7 +2217,17 @@ function renderItemList(){
     // drag
     row.addEventListener('dragstart',e=>{ e.dataTransfer.setData('text',idx); });
     row.addEventListener('dragover',e=>e.preventDefault());
-    row.addEventListener('drop',e=>{ e.preventDefault(); const from=parseInt(e.dataTransfer.getData('text')); const to=idx; if(from===to) return; const a=state.items.splice(from,1)[0]; state.items.splice(to,0,a); renderItemList(); saveStorage(); });
+    row.addEventListener('drop',e=>{
+      e.preventDefault();
+      const from=parseInt(e.dataTransfer.getData('text'));
+      const to=idx;
+      if(from===to) return;
+      const a=state.items.splice(from,1)[0];
+      state.items.splice(to,0,a);
+      state.items.forEach((it,i)=>{ it.order=i; });
+      renderItemList(); saveStorage();
+      state.items.forEach(it=>saveSharedItem(it));
+    });
     wrap.appendChild(row);
   });
 }
@@ -2226,7 +2244,9 @@ function renderMissingNoBanner(){
 }
 function deleteItem(idx){
   if(!confirm('削除しますか？（出品Noは欠番になります）')) return;
+  const no=state.items[idx].no;
   state.items.splice(idx,1); renderItemList(); saveStorage();
+  deleteSharedItem(no);
 }
 function editItem(idx){
   const item=state.items[idx];
@@ -2495,7 +2515,8 @@ function resetForm(){
   resetFormData();
 }
 function resetAllData(){
-  if(!confirm('フォームと商品リストのすべてのデータを初期化します。この操作は元に戻せません。よろしいですか？')) return;
+  if(!confirm('フォームと商品リストのすべてのデータを初期化します。商品リストは全員で共有されているため、他の人の画面からも消えます。この操作は元に戻せません。よろしいですか？')) return;
+  const nosToDelete = state.items.map(it=>it.no);
   state.items=[];
   state.nextNo=1;
   state.usedNos=[];
@@ -2506,10 +2527,15 @@ function resetAllData(){
   resetFormData();
   renderItemList();
   saveStorage();
+  nosToDelete.forEach(no=>deleteSharedItem(no));
+  saveSharedMeta();
 }
 
 // ===== ZIP EXPORT =====
-function showConfirm(){
+async function showConfirm(){
+  // ダブルチェック担当が常に最新の商品リストを見られるよう、確認画面を開く直前に共有データを再取得する
+  await loadSharedItems();
+  renderItemList();
   const exportable=state.items.filter(it=>!it.zipped);
   if(!exportable.length){ alert('ZIP出力できる商品がありません（すべてZIP作成済みです）。'); return; }
   const list=document.getElementById('confirm-list'); list.innerHTML='';
@@ -2553,6 +2579,45 @@ function saveDropboxTokenFromSetup(){
   updateDropboxTokenStatus();
   alert('Dropboxトークンを保存しました。この端末では次回以降表示されません。');
 }
+// ===== 共有商品リスト（Cloudflare KV経由・入力担当とダブルチェック担当で同じリストを見るための仕組み） =====
+// Worker側のAPIに到達できない場合（file://で開いた等）は自動でローカルのみの動作にフォールバックする
+let sharedSyncAvailable = true;
+async function apiFetch(path, options){
+  const res = await fetch(path, options);
+  if(!res.ok) throw new Error('API error: '+res.status);
+  return await res.json();
+}
+async function loadSharedItems(){
+  try{
+    const data = await apiFetch('/api/items');
+    const meta = await apiFetch('/api/meta');
+    state.items = data.items || [];
+    state.nextNo = meta.nextNo || 1;
+    state.usedNos = meta.usedNos || [];
+    sharedSyncAvailable = true;
+  } catch(e){
+    sharedSyncAvailable = false;
+    console.warn('共有リストの取得に失敗しました。ローカルのデータのまま動作します。', e);
+  }
+}
+async function saveSharedItem(item){
+  if(!sharedSyncAvailable) return;
+  try{
+    await apiFetch(`/api/items/${item.no}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(item) });
+  } catch(e){ console.warn('商品の共有保存に失敗しました。', e); }
+}
+async function deleteSharedItem(no){
+  if(!sharedSyncAvailable) return;
+  try{ await apiFetch(`/api/items/${no}`, { method:'DELETE' }); }
+  catch(e){ console.warn('商品の共有削除に失敗しました。', e); }
+}
+async function saveSharedMeta(){
+  if(!sharedSyncAvailable) return;
+  try{
+    await apiFetch('/api/meta', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ nextNo: state.nextNo, usedNos: state.usedNos }) });
+  } catch(e){ console.warn('管理情報の共有保存に失敗しました。', e); }
+}
+
 function closeDropboxSetup(){
   document.getElementById('dropbox-setup-overlay').classList.add('hidden');
 }
@@ -2717,6 +2782,7 @@ async function exportZip(){
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     item.zipped=true;
+    await saveSharedItem(item);
     await new Promise(r=>setTimeout(r,400));
   }
   closeOverlay();
