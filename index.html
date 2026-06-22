@@ -2082,7 +2082,7 @@ function validate(){
 }
 
 // ===== ADD ITEM =====
-function addItem(){
+async function addItem(){
   if(!state.type){ alert('出品タイプを選択してください'); return; }
   if(!validate()) { document.querySelector('.has-error')?.scrollIntoView({behavior:'smooth',block:'center'}); return; }
   const no=state.nextNo;
@@ -2114,13 +2114,13 @@ function addItem(){
   state.items.push(item);
   renderItemList();
   saveStorage();
-  saveSharedItem(item);
-  saveSharedMeta();
+  await saveSharedItem(item);
+  await saveSharedMeta();
   alert(`出品No.${String(no).padStart(2,'0')} を追加しました。`);
   resetFormData();
 }
 
-function updateItem(){
+async function updateItem(){
   const idx=state.editingIdx;
   if(idx===undefined||idx===null) return;
   if(!validate()) { document.querySelector('.has-error')?.scrollIntoView({behavior:'smooth',block:'center'}); return; }
@@ -2145,7 +2145,7 @@ function updateItem(){
   item.imagesAdditionalData = (state.additionalImages||[]).map(im => im.src || '');
   state.editingIdx=null;
   renderItemList(); saveStorage();
-  saveSharedItem(item);
+  await saveSharedItem(item);
   // ボタンを元に戻す
   const addBtn=document.getElementById('add-update-btn');
   addBtn.textContent='商品リストに追加';
