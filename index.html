@@ -2713,8 +2713,10 @@ async function loadSharedItems(){
 }
 async function saveSharedItem(item){
   if(!sharedSyncAvailable) return;
+  // pendingは「このブラウザで今まさに送信中」を示すローカル限定の表示用フラグなので、共有データには含めない
+  const { pending, ...itemToSend } = item;
   try{
-    await apiFetch(`/api/items/${item.no}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(item) });
+    await apiFetch(`/api/items/${item.no}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(itemToSend) });
   } catch(e){ console.warn('商品の共有保存に失敗しました。', e); }
 }
 async function deleteSharedItem(no){
