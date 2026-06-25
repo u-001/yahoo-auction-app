@@ -2708,11 +2708,42 @@ async function apiFetch(path, options){
   if(!res.ok) throw new Error('API error: '+res.status);
   return await res.json();
 }
+// 画像をプレビュー用サイズに圧縮する（KV 容量対策 ＆ ダブルチェック担当が閲覧できるよう共有）
+async function compressImageDataUrl(dataUrl, maxWidth = 1200, quality = 0.80) {
+  if (!dataUrl) return '';
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+      if (width > maxWidth) { height = Math.round(height * maxWidth / width); width = maxWidth; }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => resolve('');
+    img.src = dataUrl;
+  });
+}
+async function compressImagesForSharing(dataUrls) {
+  const results = [];
+  for (const url of (dataUrls || [])) results.push(await compressImageDataUrl(url));
+  return results;
+}
+
 async function loadSharedItems(){
   try{
     const data = await apiFetch('/api/items');
     const meta = await apiFetch('/api/meta');
-    state.items = data.items || [];
+    // ローカルに原寸画像データがある商品はそれを優先し、ZIP生成に使えるよう保持する
+    const localMap = new Map((state.items || []).map(it => [it.no, it]));
+    state.items = (data.items || []).map(serverItem => {
+      const local = localMap.get(serverItem.no);
+      if (local && (local.imagesMainData || []).some(d => d)) {
+        return { ...serverItem, imagesMainData: local.imagesMainData, imagesAdditionalData: local.imagesAdditionalData || [] };
+      }
+      return serverItem;
+    });
     state.nextNo = meta.nextNo || 1;
     state.usedNos = meta.usedNos || [];
     sharedSyncAvailable = true;
@@ -2723,8 +2754,10 @@ async function loadSharedItems(){
 }
 async function saveSharedItem(item){
   if(!sharedSyncAvailable) return true;
-  // pendingは「このブラウザで今まさに送信中」を示すローカル限定の表示用フラグなので、共有データには含めない
-  const { pending, ...itemToSend } = item;
+  const { pending, imagesMainData, imagesAdditionalData, ...itemToSend } = item;
+  // 画像をプレビューサイズに圧縮してサーバーに保存する（ダブルチェック担当も閲覧可能）
+  itemToSend.imagesMainData = await compressImagesForSharing(imagesMainData);
+  itemToSend.imagesAdditionalData = await compressImagesForSharing(imagesAdditionalData);
   try{
     await apiFetch(`/api/items/${item.no}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(itemToSend) });
     return true;
