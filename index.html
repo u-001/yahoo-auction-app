@@ -1364,7 +1364,15 @@ function buildWheelInchSelect(){
 
 // ===== STORAGE =====
 function saveStorage(){
-  try { localStorage.setItem('yauction_state', JSON.stringify(state)); } catch(e){}
+  try {
+    const toSave = {
+      ...state,
+      mainImages: [],
+      additionalImages: [],
+      items: (state.items || []).map(({ imagesMainData, imagesAdditionalData, ...rest }) => rest)
+    };
+    localStorage.setItem('yauction_state', JSON.stringify(toSave));
+  } catch(e){}
 }
 function loadStorage(){
   try {
@@ -2200,6 +2208,7 @@ async function addItem(){
   } finally {
     isSubmittingItem = false;
     addBtn0.disabled = false;
+    addBtn0.textContent = addBtnLabel0;
     setFormSubmittingUI(false);
     hideSubmittingOverlay();
   }
@@ -2212,6 +2221,7 @@ async function updateItem(){
   if(!validate()) { document.querySelector('.has-error')?.scrollIntoView({behavior:'smooth',block:'center'}); return; }
   isSubmittingItem = true;
   const updBtn0=document.getElementById('add-update-btn');
+  const updBtnLabel0=updBtn0.textContent;
   updBtn0.disabled = true;
   updBtn0.textContent = '送信中...';
   setFormSubmittingUI(true);
@@ -2251,6 +2261,7 @@ async function updateItem(){
   } finally {
     isSubmittingItem = false;
     updBtn0.disabled = false;
+    updBtn0.textContent = updBtnLabel0;
     setFormSubmittingUI(false);
     hideSubmittingOverlay();
   }
@@ -2714,12 +2725,14 @@ async function compressImageDataUrl(dataUrl, maxWidth = 1200, quality = 0.80) {
   return new Promise((resolve) => {
     const img = new Image();
     img.onload = () => {
-      let { width, height } = img;
-      if (width > maxWidth) { height = Math.round(height * maxWidth / width); width = maxWidth; }
-      const canvas = document.createElement('canvas');
-      canvas.width = width; canvas.height = height;
-      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-      resolve(canvas.toDataURL('image/jpeg', quality));
+      try {
+        let { width, height } = img;
+        if (width > maxWidth) { height = Math.round(height * maxWidth / width); width = maxWidth; }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      } catch(e) { resolve(''); }
     };
     img.onerror = () => resolve('');
     img.src = dataUrl;
