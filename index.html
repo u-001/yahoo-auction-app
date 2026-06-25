@@ -2180,7 +2180,17 @@ async function addItem(){
   state.items.push(item);
   renderItemList();
   saveStorage();
-  await saveSharedItem(item);
+  const itemSaved = await saveSharedItem(item);
+  if(!itemSaved){
+    // サーバー保存失敗 → ローカル状態をロールバックして欠番を防ぐ
+    state.items.pop();
+    state.nextNo--;
+    state.usedNos.pop();
+    renderItemList();
+    saveStorage();
+    alert('サーバーへの保存に失敗しました。ネットワーク状態を確認して再試行してください。');
+    return;
+  }
   await saveSharedMeta();
   item.pending = false;
   renderItemList();
@@ -2712,12 +2722,13 @@ async function loadSharedItems(){
   }
 }
 async function saveSharedItem(item){
-  if(!sharedSyncAvailable) return;
+  if(!sharedSyncAvailable) return true;
   // pendingは「このブラウザで今まさに送信中」を示すローカル限定の表示用フラグなので、共有データには含めない
   const { pending, ...itemToSend } = item;
   try{
     await apiFetch(`/api/items/${item.no}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(itemToSend) });
-  } catch(e){ console.warn('商品の共有保存に失敗しました。', e); }
+    return true;
+  } catch(e){ console.warn('商品の共有保存に失敗しました。', e); return false; }
 }
 async function deleteSharedItem(no){
   if(!sharedSyncAvailable) return;
