@@ -2714,17 +2714,25 @@ function saveDropboxTokenFromSetup(){
 // ===== 共有商品リスト（Cloudflare KV経由・入力担当とダブルチェック担当で同じリストを見るための仕組み） =====
 // Worker側のAPIに到達できない場合（file://で開いた等）は自動でローカルのみの動作にフォールバックする
 let sharedSyncAvailable = true;
-async function apiFetch(path, options){
-  const res = await fetch(path, options);
-  if(!res.ok) throw new Error('API error: '+res.status);
-  return await res.json();
+async function apiFetch(path, options, timeoutMs = 30000){
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try{
+    const res = await fetch(path, { ...options, signal: ctrl.signal });
+    if(!res.ok) throw new Error('API error: '+res.status);
+    return await res.json();
+  } finally {
+    clearTimeout(timer);
+  }
 }
 // 画像をプレビュー用サイズに圧縮する（KV 容量対策 ＆ ダブルチェック担当が閲覧できるよう共有）
 async function compressImageDataUrl(dataUrl, maxWidth = 1200, quality = 0.80) {
   if (!dataUrl) return '';
   return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(''), 10000);
     const img = new Image();
     img.onload = () => {
+      clearTimeout(timer);
       try {
         let { width, height } = img;
         if (width > maxWidth) { height = Math.round(height * maxWidth / width); width = maxWidth; }
@@ -2734,7 +2742,7 @@ async function compressImageDataUrl(dataUrl, maxWidth = 1200, quality = 0.80) {
         resolve(canvas.toDataURL('image/jpeg', quality));
       } catch(e) { resolve(''); }
     };
-    img.onerror = () => resolve('');
+    img.onerror = () => { clearTimeout(timer); resolve(''); };
     img.src = dataUrl;
   });
 }
@@ -2768,13 +2776,23 @@ async function loadSharedItems(){
 async function saveSharedItem(item){
   if(!sharedSyncAvailable) return true;
   const { pending, imagesMainData, imagesAdditionalData, ...itemToSend } = item;
-  // 画像をプレビューサイズに圧縮してサーバーに保存する（ダブルチェック担当も閲覧可能）
-  itemToSend.imagesMainData = await compressImagesForSharing(imagesMainData);
-  itemToSend.imagesAdditionalData = await compressImagesForSharing(imagesAdditionalData);
+  // まず画像なしでメタデータだけを即時登録する（確実に成功させる）
   try{
     await apiFetch(`/api/items/${item.no}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(itemToSend) });
-    return true;
   } catch(e){ console.warn('商品の共有保存に失敗しました。', e); return false; }
+  // 登録成功後、画像をバックグラウンドで圧縮・送信（ダブルチェック担当の閲覧用・失敗しても登録は有効）
+  if((imagesMainData||[]).some(d=>d) || (imagesAdditionalData||[]).some(d=>d)){
+    sendImagesInBackground(item.no, imagesMainData, imagesAdditionalData, itemToSend);
+  }
+  return true;
+}
+async function sendImagesInBackground(no, imagesMainData, imagesAdditionalData, baseItem){
+  try{
+    const compMain = await compressImagesForSharing(imagesMainData);
+    const compAdditional = await compressImagesForSharing(imagesAdditionalData);
+    if(!compMain.some(d=>d) && !compAdditional.some(d=>d)) return;
+    await apiFetch(`/api/items/${no}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ...baseItem, imagesMainData: compMain, imagesAdditionalData: compAdditional }) });
+  } catch(e){ console.warn('画像の共有保存に失敗しました（ダブルチェック用プレビュー）。', e); }
 }
 async function deleteSharedItem(no){
   if(!sharedSyncAvailable) return;
