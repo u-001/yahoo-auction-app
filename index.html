@@ -2150,11 +2150,11 @@ async function addItem(){
   if(isSubmittingItem) return; // 二重送信防止
   if(!state.type){ alert('出品タイプを選択してください'); return; }
   if(!validate()) { document.querySelector('.has-error')?.scrollIntoView({behavior:'smooth',block:'center'}); return; }
-  const addBtn0=document.getElementById('add-update-btn');
-  const addBtnLabel0=addBtn0?.textContent ?? '商品リストに追加';
   isSubmittingItem = true;
+  let _addBtn = null;
   try{
-  if(addBtn0){ addBtn0.disabled = true; addBtn0.textContent = '送信中...'; }
+  _addBtn = document.getElementById('add-update-btn');
+  if(_addBtn){ _addBtn.disabled = true; _addBtn.textContent = '送信中...'; }
   setFormSubmittingUI(true);
   showSubmittingOverlay('商品を送信中...');
   const no=state.nextNo;
@@ -2206,9 +2206,10 @@ async function addItem(){
   resetFormData();
   } finally {
     isSubmittingItem = false;
-    if(addBtn0){ addBtn0.disabled = false; addBtn0.textContent = addBtnLabel0; }
     setFormSubmittingUI(false);
     hideSubmittingOverlay();
+    const btn = _addBtn || document.getElementById('add-update-btn');
+    if(btn){ btn.disabled = false; btn.textContent = '商品リストに追加'; btn.onclick = addItem; }
   }
 }
 
@@ -2217,11 +2218,11 @@ async function updateItem(){
   const idx=state.editingIdx;
   if(idx===undefined||idx===null) return;
   if(!validate()) { document.querySelector('.has-error')?.scrollIntoView({behavior:'smooth',block:'center'}); return; }
-  const updBtn0=document.getElementById('add-update-btn');
-  const updBtnLabel0=updBtn0?.textContent ?? '商品リストを更新';
   isSubmittingItem = true;
+  let _updBtn = null;
   try{
-  if(updBtn0){ updBtn0.disabled = true; updBtn0.textContent = '送信中...'; }
+  _updBtn = document.getElementById('add-update-btn');
+  if(_updBtn){ _updBtn.disabled = true; _updBtn.textContent = '送信中...'; }
   setFormSubmittingUI(true);
   showSubmittingOverlay('商品を送信中...');
   const item=state.items[idx];
@@ -2249,17 +2250,23 @@ async function updateItem(){
   await saveSharedItem(item);
   item.pending = false;
   renderItemList(); saveStorage();
-  // ボタンを元に戻す
-  const addBtn=document.getElementById('add-update-btn');
-  addBtn.textContent='商品リストに追加';
-  addBtn.onclick=addItem;
   alert(`No.${String(item.no).padStart(2,'0')} を更新しました。`);
   resetFormData();
   } finally {
     isSubmittingItem = false;
-    if(updBtn0){ updBtn0.disabled = false; updBtn0.textContent = updBtnLabel0; }
     setFormSubmittingUI(false);
     hideSubmittingOverlay();
+    const btn = _updBtn || document.getElementById('add-update-btn');
+    if(btn){
+      btn.disabled = false;
+      // editingIdxがまだ残っていれば更新失敗→編集継続モード、nullなら追加モードへ
+      if(state.editingIdx !== null){
+        btn.textContent = '商品リストを更新'; btn.onclick = updateItem;
+      } else {
+        btn.textContent = '商品リストに追加'; btn.onclick = addItem;
+        exitEditModal(); // resetFormData()未到達の場合もモーダルを必ず閉じる
+      }
+    }
   }
 }
 
