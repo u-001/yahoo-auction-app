@@ -2150,14 +2150,13 @@ async function addItem(){
   if(isSubmittingItem) return; // 二重送信防止
   if(!state.type){ alert('出品タイプを選択してください'); return; }
   if(!validate()) { document.querySelector('.has-error')?.scrollIntoView({behavior:'smooth',block:'center'}); return; }
-  isSubmittingItem = true;
   const addBtn0=document.getElementById('add-update-btn');
-  const addBtnLabel0=addBtn0.textContent;
-  addBtn0.disabled = true;
-  addBtn0.textContent = '送信中...';
+  const addBtnLabel0=addBtn0?.textContent ?? '商品リストに追加';
+  isSubmittingItem = true;
+  try{
+  if(addBtn0){ addBtn0.disabled = true; addBtn0.textContent = '送信中...'; }
   setFormSubmittingUI(true);
   showSubmittingOverlay('商品を送信中...');
-  try{
   const no=state.nextNo;
   state.nextNo++;
   state.usedNos.push(no);
@@ -2207,8 +2206,7 @@ async function addItem(){
   resetFormData();
   } finally {
     isSubmittingItem = false;
-    addBtn0.disabled = false;
-    addBtn0.textContent = addBtnLabel0;
+    if(addBtn0){ addBtn0.disabled = false; addBtn0.textContent = addBtnLabel0; }
     setFormSubmittingUI(false);
     hideSubmittingOverlay();
   }
@@ -2219,14 +2217,13 @@ async function updateItem(){
   const idx=state.editingIdx;
   if(idx===undefined||idx===null) return;
   if(!validate()) { document.querySelector('.has-error')?.scrollIntoView({behavior:'smooth',block:'center'}); return; }
-  isSubmittingItem = true;
   const updBtn0=document.getElementById('add-update-btn');
-  const updBtnLabel0=updBtn0.textContent;
-  updBtn0.disabled = true;
-  updBtn0.textContent = '送信中...';
+  const updBtnLabel0=updBtn0?.textContent ?? '商品リストを更新';
+  isSubmittingItem = true;
+  try{
+  if(updBtn0){ updBtn0.disabled = true; updBtn0.textContent = '送信中...'; }
   setFormSubmittingUI(true);
   showSubmittingOverlay('商品を送信中...');
-  try{
   const item=state.items[idx];
   item.title=document.getElementById('f-title').value;
   item.desc=buildDescription(item.no);
@@ -2260,8 +2257,7 @@ async function updateItem(){
   resetFormData();
   } finally {
     isSubmittingItem = false;
-    updBtn0.disabled = false;
-    updBtn0.textContent = updBtnLabel0;
+    if(updBtn0){ updBtn0.disabled = false; updBtn0.textContent = updBtnLabel0; }
     setFormSubmittingUI(false);
     hideSubmittingOverlay();
   }
@@ -2939,7 +2935,11 @@ async function exportZip(){
     setExportStatus('準備中...');
     const s=document.createElement('script'); s.src='https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
     document.head.appendChild(s);
-    await new Promise(r=>s.onload=r);
+    await new Promise((resolve, reject) => {
+      s.onload = resolve;
+      s.onerror = () => reject(new Error('JSZipの読み込みに失敗しました'));
+      setTimeout(() => reject(new Error('JSZip読み込みタイムアウト')), 15000);
+    });
   }
   // 商品ごとにZIPを生成して保存先フォルダへ1件ずつ保存（追加画像はDropboxへアップロード）
   for(const item of targets){
@@ -3000,6 +3000,7 @@ async function exportZip(){
     isExporting = false;
     setExportButtonsDisabled(false);
     setExportStatus(null);
+    closeOverlay(); // 失敗時も確認ダイアログを必ず閉じる
   }
 }
 
