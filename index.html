@@ -2924,6 +2924,13 @@ async function exportZip(){
     const nosStr = noImageTargets.map(it=>'No.'+String(it.no).padStart(2,'0')).join('、');
     if(!confirm(`${nosStr} は画像がアップロードされていません。このままZIPを作成しますか？`)) return;
   }
+  // 保存先フォルダをユーザーに1回だけ選択させる（Chrome/Edge対応）
+  // キャンセルまたは非対応の場合は個別ダウンロードにフォールバック
+  let dirHandle = null;
+  if(window.showDirectoryPicker){
+    try{ dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' }); }
+    catch(e){}
+  }
   isExporting = true;
   setExportButtonsDisabled(true);
   try{
@@ -2934,11 +2941,11 @@ async function exportZip(){
     document.head.appendChild(s);
     await new Promise(r=>s.onload=r);
   }
-  // 選択された商品ごとに個別ZIPを生成してダウンロード（11枚目以降の画像はZIPとは別にDropboxへアップロード）
+  // 商品ごとにZIPを生成して保存先フォルダへ1件ずつ保存（追加画像はDropboxへアップロード）
   for(const item of targets){
     const noStr = String(item.no).padStart(2,'0');
     let extraUrl=null;
-    if((item.imagesAdditionalData||[]).length){
+    if((item.imagesAdditionalData||[]).some(d=>d)){
       setExportStatus(`No.${noStr} の追加画像をDropboxにアップロード中...`);
       try{ extraUrl = await uploadExtraImagesAndGetLink(item); }
       catch(e){ alert(`No.${noStr} の追加画像のDropboxアップロードに失敗しました。追加画像リンクなしで出力します。\n${e.message}`); }
@@ -2946,10 +2953,7 @@ async function exportZip(){
     setExportStatus(`No.${noStr} のZIPを作成中...`);
     const itemForCsv = {...item, desc: finalizeDescriptionWithDropboxUrl(item.desc, extraUrl)};
     const zip=new JSZip();
-    const csvRow=buildCSV(itemForCsv);
-    const csvHeader=buildCSVHeader();
-    const csvContent=csvHeader+'\n'+csvRow;
-    zip.file(String(item.no)+'.csv', '\uFEFF'+csvContent);
+    zip.file(String(item.no)+'.csv', '\uFEFF'+buildCSVHeader()+'\n'+buildCSV(itemForCsv));
     // Add main images (1-10) into ZIP using filenames shared with the CSV
     const imgs = item.imagesMainData || [];
     const filenames = buildMainImageFilenames(item);
@@ -2959,19 +2963,34 @@ async function exportZip(){
       if(!dataUrl || !filename) continue;
       const m = dataUrl.match(/^data:(.+);base64,(.*)$/);
       if(!m) continue;
-      const b64 = m[2];
-      zip.file(filename, b64, {base64: true});
+      zip.file(filename, m[2], {base64: true});
     }
-    const blob=await zip.generateAsync({type:'blob'});
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement('a'); a.href=url;
-    a.download=formatZipName(item)+'.zip';
-    document.body.appendChild(a); a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    const zipBlob=await zip.generateAsync({type:'blob'});
+    const zipName=formatZipName(item)+'.zip';
+    if(dirHandle){
+      // 選択したフォルダへ直接保存
+      try{
+        const fh=await dirHandle.getFileHandle(zipName, {create:true});
+        const w=await fh.createWritable();
+        await w.write(zipBlob);
+        await w.close();
+      } catch(saveErr){
+        console.warn('フォルダ保存に失敗、ダウンロードにフォールバック:', saveErr);
+        const url=URL.createObjectURL(zipBlob);
+        const a=document.createElement('a'); a.href=url; a.download=zipName;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+    } else {
+      // フォルダ未選択またはキャンセル時は通常のブラウザダウンロード
+      const url=URL.createObjectURL(zipBlob);
+      const a=document.createElement('a'); a.href=url; a.download=zipName;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      if(targets.length>1) await new Promise(r=>setTimeout(r,300));
+    }
     item.zipped=true;
     await saveSharedItem(item);
-    await new Promise(r=>setTimeout(r,400));
   }
   closeOverlay();
   renderItemList();
