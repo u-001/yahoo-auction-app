@@ -1061,13 +1061,15 @@
     </div>
     <div class="sec-sub">追加画像（11枚目以降）はDropboxの「追加画像一覧_URL発行済み_ヤフオク閲覧可能」配下に自動保存されます。</div>
     <div id="confirm-list"></div>
-    <div id="export-status" class="hidden" style="display:flex;align-items:flex-start;flex-wrap:wrap;gap:10px;background:var(--accent-bg);border:1px solid var(--accent);border-radius:var(--radius-sm);padding:10px 12px;margin-top:12px;color:var(--accent);font-weight:700;font-size:.9rem;">
-      <span class="export-spinner" style="width:16px;height:16px;border:2px solid var(--accent);border-top-color:transparent;border-radius:50%;display:inline-block;animation:export-spin .7s linear infinite;flex-shrink:0;margin-top:2px;"></span>
-      <span id="export-status-text" style="flex:1;min-width:0;word-break:break-word;"></span>
-    </div>
-    <div class="action-bar" style="margin-top:16px;">
-      <button class="btn-primary" id="export-zip-btn" onclick="exportZip()">ZIP出力</button>
-      <button class="btn-secondary" id="export-cancel-btn" onclick="closeOverlay()">キャンセル</button>
+    <div class="action-bar" style="margin-top:16px;flex-direction:column;align-items:stretch;gap:0;">
+      <div id="export-status" class="hidden" style="display:flex;align-items:flex-start;flex-wrap:wrap;gap:10px;background:var(--accent-bg);border:1px solid var(--accent);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:12px;color:var(--accent);font-weight:700;font-size:.9rem;">
+        <span class="export-spinner" style="width:16px;height:16px;border:2px solid var(--accent);border-top-color:transparent;border-radius:50%;display:inline-block;animation:export-spin .7s linear infinite;flex-shrink:0;margin-top:2px;"></span>
+        <span id="export-status-text" style="flex:1;min-width:0;word-break:break-word;"></span>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn-primary" id="export-zip-btn" onclick="exportZip()">ZIP出力</button>
+        <button class="btn-secondary" id="export-cancel-btn" onclick="closeOverlay()">キャンセル</button>
+      </div>
     </div>
   </div>
 </div>
