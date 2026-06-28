@@ -1093,6 +1093,17 @@
   <button type="button" onclick="hideToast()">OK</button>
 </div>
 
+<!-- カスタム確認ダイアログ（ブラウザのconfirmの代替） -->
+<div id="custom-confirm-overlay" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:700;">
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px 28px;max-width:420px;width:92%;box-shadow:0 12px 48px rgba(0,0,0,.45);">
+    <p id="custom-confirm-msg" style="font-size:.95rem;margin-bottom:20px;line-height:1.65;white-space:pre-wrap;color:var(--text);"></p>
+    <div style="display:flex;gap:10px;justify-content:flex-end;">
+      <button id="custom-confirm-no" class="btn-secondary" style="padding:8px 20px;">キャンセル</button>
+      <button id="custom-confirm-yes" class="btn-danger" style="padding:8px 20px;">OK</button>
+    </div>
+  </div>
+</div>
+
 <!-- 送信中：画面全体を覆って操作不可にするオーバーレイ -->
 <div id="submitting-overlay" class="hidden">
   <div id="submitting-box">
@@ -1167,7 +1178,7 @@ function initUnifiedImageUpload() {
 }
 function handleUnifiedImageFiles(fileList) {
   const files = Array.from(fileList).filter(f => f.type.startsWith('image/'));
-  if (!files.length) { alert('画像ファイルが見つかりませんでした。'); return; }
+  if (!files.length) { showToast('画像ファイルが見つかりませんでした。'); return; }
   files.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
   const mainSlots = Math.max(0, 10 - state.mainImages.length);
   const mainFiles = files.slice(0, mainSlots);
@@ -1204,7 +1215,7 @@ function moveImageBetween(srcType, srcIdx, destType, destIdx) {
   } else {
     const maxLen = destType === 'main' ? 10 : 20;
     if (destArr.length >= maxLen) {
-      alert(destType === 'main' ? 'メイン画像は最大10枚までです。' : '追加画像は最大20枚までです。');
+      showToast(destType === 'main' ? 'メイン画像は最大10枚までです。' : '追加画像は最大20枚までです。');
       return;
     }
     const [moved] = srcArr.splice(srcIdx, 1);
@@ -1244,7 +1255,7 @@ function handleImageFiles(files, type = 'main') {
     const msg = type === 'main' 
       ? '画像は最大10枚までアップロードできます。'
       : '追加画像は最大20枚までアップロードできます。';
-    alert(msg);
+    showToast(msg);
   }
 }
 
@@ -2148,7 +2159,7 @@ function hideSubmittingOverlay(){
 }
 async function addItem(){
   if(isSubmittingItem) return; // 二重送信防止
-  if(!state.type){ alert('出品タイプを選択してください'); return; }
+  if(!state.type){ showToast('出品タイプを選択してください'); return; }
   if(!validate()) { document.querySelector('.has-error')?.scrollIntoView({behavior:'smooth',block:'center'}); return; }
   isSubmittingItem = true;
   let _addBtn = null;
@@ -2195,14 +2206,14 @@ async function addItem(){
     state.usedNos.pop();
     renderItemList();
     saveStorage();
-    alert('サーバーへの保存に失敗しました。ネットワーク状態を確認して再試行してください。');
+    showToast('サーバーへの保存に失敗しました。ネットワーク状態を確認して再試行してください。');
     return;
   }
   await saveSharedMeta();
   item.pending = false;
   renderItemList();
   saveStorage();
-  alert(`出品No.${String(no).padStart(2,'0')} を追加しました。`);
+  showToast(`出品No.${String(no).padStart(2,'0')} を追加しました。`);
   resetFormData();
   } finally {
     isSubmittingItem = false;
@@ -2250,7 +2261,7 @@ async function updateItem(){
   await saveSharedItem(item);
   item.pending = false;
   renderItemList(); saveStorage();
-  alert(`No.${String(item.no).padStart(2,'0')} を更新しました。`);
+  showToast(`No.${String(item.no).padStart(2,'0')} を更新しました。`);
   resetFormData();
   } finally {
     isSubmittingItem = false;
@@ -2371,16 +2382,16 @@ function renderMissingNoBanner(){
   banner.innerHTML='<span class="label">欠番：</span>'+
     missing.map(no=>`<span class="missing-no-chip">No.${String(no).padStart(2,'0')}</span>`).join('');
 }
-function deleteItem(idx){
-  if(!confirm('削除しますか？（出品Noは欠番になります）')) return;
+async function deleteItem(idx){
+  if(!await customConfirm('削除しますか？（出品Noは欠番になります）')) return;
   const no=state.items[idx].no;
   state.items.splice(idx,1); renderItemList(); saveStorage();
   deleteSharedItem(no);
 }
-function editItem(idx){
+async function editItem(idx){
   const item=state.items[idx];
-  if(item.zipped){ alert('ZIP作成済みの商品は編集できません。'); return; }
-  if(!confirm(`No.${String(item.no).padStart(2,'0')} を編集します。現在のフォーム入力内容は失われます。よろしいですか？`)) return;
+  if(item.zipped){ showToast('ZIP作成済みの商品は編集できません。'); return; }
+  if(!await customConfirm(`No.${String(item.no).padStart(2,'0')} を編集します。現在のフォーム入力内容は失われます。よろしいですか？`)) return;
   state.editingIdx=idx;
   // フォームにデータを復元
   setType(item.type, true);
@@ -2568,8 +2579,8 @@ function exitEditModal(){
   document.getElementById('form-section-title').textContent='新規出品';
   document.getElementById('edit-mode-bar').classList.add('hidden');
 }
-function cancelEditItem(){
-  if(!confirm('編集を中止しますか？入力内容は破棄されます。')) return;
+async function cancelEditItem(){
+  if(!await customConfirm('編集を中止しますか？入力内容は破棄されます。')) return;
   resetFormData();
 }
 
@@ -2639,12 +2650,12 @@ function resetFormData(keepImages){
   }
   updatePreview();
 }
-function resetForm(){
-  if(!confirm('フォームをリセットしますか？')) return;
+async function resetForm(){
+  if(!await customConfirm('フォームをリセットしますか？')) return;
   resetFormData();
 }
 async function resetAllData(){
-  if(!confirm('フォームと商品リストのすべてのデータを初期化します。商品リストは全員で共有されているため、他の人の画面からも消えます。この操作は元に戻せません。よろしいですか？')) return;
+  if(!await customConfirm('フォームと商品リストのすべてのデータを初期化します。商品リストは全員で共有されているため、他の人の画面からも消えます。この操作は元に戻せません。よろしいですか？')) return;
   const nosToDelete = state.items.map(it=>it.no);
   state.items=[];
   state.nextNo=1;
@@ -2672,7 +2683,7 @@ async function showConfirm(){
   await loadSharedItems();
   renderItemList();
   const exportable=state.items.filter(it=>!it.zipped);
-  if(!exportable.length){ alert('ZIP出力できる商品がありません（すべてZIP作成済みです）。'); return; }
+  if(!exportable.length){ showToast('ZIP出力できる商品がありません（すべてZIP作成済みです）。'); return; }
   const list=document.getElementById('confirm-list'); list.innerHTML='';
   exportable.forEach(item=>{
     const row=document.createElement('div'); row.className='confirm-row';
@@ -2707,12 +2718,12 @@ function checkDropboxTokenSetup(){
 function saveDropboxTokenFromSetup(){
   const input=document.getElementById('dropbox-setup-input');
   const val=input.value.trim();
-  if(!val){ alert('トークンを入力してください。'); return; }
+  if(!val){ showToast('トークンを入力してください。'); return; }
   localStorage.setItem('yauction_dropbox_token', val);
   input.value='';
   document.getElementById('dropbox-setup-overlay').classList.add('hidden');
   updateDropboxTokenStatus();
-  alert('Dropboxトークンを保存しました。この端末では次回以降表示されません。');
+  showToast('Dropboxトークンを保存しました。この端末では次回以降表示されません。');
 }
 // ===== 共有商品リスト（Cloudflare KV経由・入力担当とダブルチェック担当で同じリストを見るための仕組み） =====
 // Worker側のAPIに到達できない場合（file://で開いた等）は自動でローカルのみの動作にフォールバックする
@@ -2919,13 +2930,13 @@ function setExportButtonsDisabled(disabled){
 async function exportZip(){
   if(isExporting) return; // ボタン連打防止
   const checkedNos = Array.from(document.querySelectorAll('.confirm-check:checked')).map(c=>parseInt(c.value,10));
-  if(!checkedNos.length){ alert('ZIP出力する商品を選択してください。'); return; }
+  if(!checkedNos.length){ showToast('ZIP出力する商品を選択してください。'); return; }
   const targets = state.items.filter(it=>checkedNos.includes(it.no));
   // 画像未アップロードの商品がある場合は注意喚起
   const noImageTargets = targets.filter(it=>!(it.imagesMainData||[]).some(d=>d));
   if(noImageTargets.length){
     const nosStr = noImageTargets.map(it=>'No.'+String(it.no).padStart(2,'0')).join('、');
-    if(!confirm(`${nosStr} は画像がアップロードされていません。このままZIPを作成しますか？`)) return;
+    if(!await customConfirm(`${nosStr} は画像がアップロードされていません。このままZIPを作成しますか？`)) return;
   }
   // 保存先フォルダをユーザーに1回だけ選択させる（Chrome/Edge対応）
   // キャンセルまたは非対応の場合は個別ダウンロードにフォールバック
@@ -2955,7 +2966,7 @@ async function exportZip(){
     if((item.imagesAdditionalData||[]).some(d=>d)){
       setExportStatus(`No.${noStr} の追加画像をDropboxにアップロード中...`);
       try{ extraUrl = await uploadExtraImagesAndGetLink(item); }
-      catch(e){ alert(`No.${noStr} の追加画像のDropboxアップロードに失敗しました。追加画像リンクなしで出力します。\n${e.message}`); }
+      catch(e){ showToast(`No.${noStr} の追加画像のDropboxアップロードに失敗しました。追加画像リンクなしで出力します。`); }
     }
     setExportStatus(`No.${noStr} のZIPを作成中...`);
     const itemForCsv = {...item, desc: finalizeDescriptionWithDropboxUrl(item.desc, extraUrl)};
@@ -3306,6 +3317,24 @@ function getShippingTables(){
       260:'◆北海道：11720円×個口数<BR>◆青森県、秋田県、岩手県：9420円×個口数<BR>◆宮城県、山形県、福島県：8710円×個口数<BR>◆茨城県、栃木県、群馬県、埼玉県、千葉県、神奈川県、東京都、山梨県：6420円×個口数<BR>◆新潟県、長野県：8420円×個口数<BR>◆静岡県、愛知県、三重県、岐阜県：8420円×個口数<BR>◆富山県、石川県、福井県：8420円×個口数<BR>◆大阪府、京都府、滋賀県、奈良県、和歌山県、兵庫県：8420円×個口数<BR>◆岡山県、広島県、山口県、鳥取県、島根県：9420円×個口数<BR>◆香川県、徳島県、愛媛県、高知県：9420円×個口数<BR>◆福岡県、佐賀県、長崎県、大分県：10360円×個口数<BR>◆熊本県、宮崎県、鹿児島県：11600円×個口数<BR>'
     }
   };
+}
+
+// ===== カスタム確認ダイアログ（ブラウザのconfirm代替） =====
+function customConfirm(message){
+  return new Promise(resolve=>{
+    document.getElementById('custom-confirm-msg').textContent=message;
+    const overlay=document.getElementById('custom-confirm-overlay');
+    overlay.classList.remove('hidden');
+    const yes=document.getElementById('custom-confirm-yes');
+    const no=document.getElementById('custom-confirm-no');
+    const done=result=>{
+      overlay.classList.add('hidden');
+      yes.onclick=null; no.onclick=null;
+      resolve(result);
+    };
+    yes.onclick=()=>done(true);
+    no.onclick=()=>done(false);
+  });
 }
 
 // Update no-badge on load
