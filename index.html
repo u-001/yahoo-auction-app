@@ -206,12 +206,12 @@
   /* Hidden */
   .hidden { display: none !important; }
   /* Overlay confirm */
-  #overlay, #dropbox-setup-overlay {
+  #overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,.6);
     display: flex; align-items: center; justify-content: center; z-index: 200;
   }
-  #overlay.hidden, #dropbox-setup-overlay.hidden { display: none; }
-  #overlay-box, #dropbox-setup-box {
+  #overlay.hidden { display: none; }
+  #overlay-box {
     background: var(--bg2); border: 1px solid var(--border);
     border-radius: 12px; padding: 24px; max-width: 560px; width: 95%;
     max-height: 80vh; overflow-y: auto;
@@ -1071,21 +1071,6 @@
   </div>
 </div>
 
-<!-- Dropbox初回設定モーダル：トークン未設定のときだけ表示 -->
-<div id="dropbox-setup-overlay" class="hidden">
-  <div id="dropbox-setup-box">
-    <h3>Dropbox連携の設定</h3>
-    <p style="font-size:.85rem;color:var(--text2);margin-bottom:14px;">追加画像（11枚目以降）をDropboxに自動保存するには、アクセストークンの登録が必要です。一度登録すれば、この端末では次回以降表示されません。</p>
-    <div class="field">
-      <label>アクセストークン</label>
-      <input type="password" id="dropbox-setup-input" placeholder="Dropboxアクセストークンを貼り付け">
-    </div>
-    <div class="action-bar">
-      <button class="btn-primary" onclick="saveDropboxTokenFromSetup()">保存</button>
-      <button class="btn-secondary" onclick="closeDropboxSetup()">あとで（次回も表示）</button>
-    </div>
-  </div>
-</div>
 
 <!-- 自動で消えるトースト通知 -->
 <div id="toast" class="hidden">
@@ -1358,8 +1343,6 @@ window.onload = () => {
   buildWheelInchSelect();
   updateQtyBtns();
   initImageUpload();
-  updateDropboxTokenStatus();
-  checkDropboxTokenSetup();
   // 共有の商品リストを取得し、ローカルの一覧を最新の内容に置き換える
   loadSharedItems().then(()=>{
     renderItemList();
@@ -2701,31 +2684,6 @@ function toggleSelectAllConfirm(checked){
   document.querySelectorAll('.confirm-check').forEach(c=>c.checked=checked);
 }
 
-// ===== DROPBOX連携（追加画像11枚目以降） =====
-function getDropboxToken(){ return localStorage.getItem('yauction_dropbox_token')||''; }
-function updateDropboxTokenStatus(){
-  const el=document.getElementById('dropbox-token-status');
-  if(!el) return;
-  el.textContent = getDropboxToken()
-    ? 'トークン設定済み（追加画像はDropboxへアップロードされます）'
-    : '未設定（追加画像がある場合もDropboxリンクなしで出力されます）';
-}
-// トークン未設定の端末でだけ初回設定ポップアップを表示する
-function checkDropboxTokenSetup(){
-  if(!getDropboxToken()){
-    document.getElementById('dropbox-setup-overlay').classList.remove('hidden');
-  }
-}
-function saveDropboxTokenFromSetup(){
-  const input=document.getElementById('dropbox-setup-input');
-  const val=input.value.trim();
-  if(!val){ showToast('トークンを入力してください。'); return; }
-  localStorage.setItem('yauction_dropbox_token', val);
-  input.value='';
-  document.getElementById('dropbox-setup-overlay').classList.add('hidden');
-  updateDropboxTokenStatus();
-  showToast('Dropboxトークンを保存しました。この端末では次回以降表示されません。');
-}
 // ===== 共有商品リスト（Cloudflare KV経由・入力担当とダブルチェック担当で同じリストを見るための仕組み） =====
 // Worker側のAPIに到達できない場合（file://で開いた等）は自動でローカルのみの動作にフォールバックする
 let sharedSyncAvailable = true;
@@ -2821,9 +2779,6 @@ async function saveSharedMeta(){
   } catch(e){ console.warn('管理情報の共有保存に失敗しました。', e); }
 }
 
-function closeDropboxSetup(){
-  document.getElementById('dropbox-setup-overlay').classList.add('hidden');
-}
 // HTTPヘッダーはASCII(ISO-8859-1)のみ許可されるため、日本語等の非ASCII文字は\uXXXXにエスケープする（Dropbox公式の仕様）
 function asciiSafeJSON(obj){
   let out = '';
@@ -2843,41 +2798,34 @@ async function withRetry(fn, retries=2, delayMs=800){
   }
   throw lastErr;
 }
-async function dropboxUploadFile(path, blob, token){
-  const res = await fetch('https://content.dropboxapi.com/2/files/upload', {
+async function dropboxUploadFile(path, blob){
+  const res = await fetch('/api/dropbox/upload?path='+encodeURIComponent(path), {
     method:'POST',
-    headers:{
-      'Authorization':'Bearer '+token,
-      'Dropbox-API-Arg':asciiSafeJSON({path, mode:'add', autorename:true, mute:true}),
-      'Content-Type':'application/octet-stream'
-    },
+    headers:{ 'Content-Type':'application/octet-stream' },
     body: blob
   });
-  if(!res.ok){ throw new Error('Dropboxアップロード失敗: '+(await res.text())); }
-}
-async function dropboxGetOrCreateSharedLink(folderPath, token){
-  const headers={'Authorization':'Bearer '+token,'Content-Type':'application/json'};
-  const res = await fetch('https://api.dropboxapi.com/2/sharing/create_shared_link_with_settings', {
-    method:'POST', headers, body: JSON.stringify({path: folderPath})
-  });
-  if(res.ok){ return (await res.json()).url; }
-  const errData = await res.json().catch(()=>({}));
-  if(errData.error && errData.error['.tag']==='shared_link_already_exists'){
-    const res2 = await fetch('https://api.dropboxapi.com/2/sharing/list_shared_links', {
-      method:'POST', headers, body: JSON.stringify({path: folderPath, direct_only:true})
-    });
-    const data2 = await res2.json();
-    if(data2.links && data2.links[0]) return data2.links[0].url;
+  if(!res.ok){
+    const errData = await res.json().catch(()=>({}));
+    throw new Error('Dropboxアップロード失敗: '+(errData.error||res.status));
   }
+}
+async function dropboxGetOrCreateSharedLink(folderPath){
+  const res = await fetch('/api/dropbox/shared-link', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({path: folderPath})
+  });
+  const data = await res.json().catch(()=>({}));
+  if(data.url) return data.url;
+  if(data.links && data.links[0]) return data.links[0].url;
   throw new Error('Dropbox共有リンクの取得に失敗しました');
 }
 // 追加画像（11枚目以降）の保存先（フォルダ名が変わる場合はここだけ書き換える）
-const DROPBOX_EXTRA_BASE_PATH = '/追加画像一覧_URL発行済み_ヤフオク閲覧可能';
+const DROPBOX_EXTRA_BASE_PATH = '/アプリ/yahoo-auction-uploader/追加画像一覧_URL発行済み_ヤフオク閲覧可能';
 // 追加画像（11枚目以降）をDropboxへアップロードし、フォルダの閲覧用共有リンクを返す
 async function uploadExtraImagesAndGetLink(item){
-  const token=getDropboxToken();
   const extra=item.imagesAdditionalData||[];
-  if(!token || !extra.length) return null;
+  if(!extra.length) return null;
   const names=item.imagesAdditional||[];
   const dateStr=(item.date||'').replace(/-/g,'')||'00000000';
   const noStr=String(item.no).padStart(2,'0');
@@ -2890,9 +2838,9 @@ async function uploadExtraImagesAndGetLink(item){
     const origName=names[i] ? names[i].replace(/\.[^.]+$/,'') : `extra${i+1}`;
     const safeName=origName.replace(/[\\/:*?"<>|]/g,'_');
     const filename=`${noStr}_${i+11}_${safeName}.${ext}`;
-    await withRetry(()=>dropboxUploadFile(`${folderPath}/${filename}`, blob, token));
+    await withRetry(()=>dropboxUploadFile(`${folderPath}/${filename}`, blob));
   }
-  return await withRetry(()=>dropboxGetOrCreateSharedLink(folderPath, token));
+  return await withRetry(()=>dropboxGetOrCreateSharedLink(folderPath));
 }
 // item.descに仕込まれたDropboxプレースホルダーを実際のURLに差し替え（URLなしの場合はブロック自体を削除）
 function finalizeDescriptionWithDropboxUrl(desc, url){
@@ -2939,13 +2887,6 @@ async function exportZip(){
     const nosStr = noImageTargets.map(it=>'No.'+String(it.no).padStart(2,'0')).join('、');
     if(!await customConfirm(`${nosStr} は画像がアップロードされていません。このままZIPを作成しますか？`)) return;
   }
-  // 保存先フォルダをユーザーに1回だけ選択させる（Chrome/Edge対応）
-  // キャンセルまたは非対応の場合は個別ダウンロードにフォールバック
-  let dirHandle = null;
-  if(window.showDirectoryPicker){
-    try{ dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' }); }
-    catch(e){}
-  }
   isExporting = true;
   setExportButtonsDisabled(true);
   try{
@@ -2986,28 +2927,11 @@ async function exportZip(){
     }
     const zipBlob=await zip.generateAsync({type:'blob'});
     const zipName=formatZipName(item)+'.zip';
-    if(dirHandle){
-      // 選択したフォルダへ直接保存
-      try{
-        const fh=await dirHandle.getFileHandle(zipName, {create:true});
-        const w=await fh.createWritable();
-        await w.write(zipBlob);
-        await w.close();
-      } catch(saveErr){
-        console.warn('フォルダ保存に失敗、ダウンロードにフォールバック:', saveErr);
-        const url=URL.createObjectURL(zipBlob);
-        const a=document.createElement('a'); a.href=url; a.download=zipName;
-        document.body.appendChild(a); a.click(); document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      }
-    } else {
-      // フォルダ未選択またはキャンセル時は通常のブラウザダウンロード
-      const url=URL.createObjectURL(zipBlob);
-      const a=document.createElement('a'); a.href=url; a.download=zipName;
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      if(targets.length>1) await new Promise(r=>setTimeout(r,300));
-    }
+    const url=URL.createObjectURL(zipBlob);
+    const a=document.createElement('a'); a.href=url; a.download=zipName;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    if(targets.length>1) await new Promise(r=>setTimeout(r,300));
     item.zipped=true;
     await saveSharedItem(item);
   }
@@ -3352,15 +3276,11 @@ document.getElementById('preview-overlay').addEventListener('click',(e)=>{
 document.getElementById('overlay').addEventListener('click',(e)=>{
   if(e.target.id==='overlay') closeOverlay();
 });
-document.getElementById('dropbox-setup-overlay').addEventListener('click',(e)=>{
-  if(e.target.id==='dropbox-setup-overlay') closeDropboxSetup();
-});
 document.addEventListener('keydown',(e)=>{
   if(e.key!=='Escape') return;
   if(!document.getElementById('edit-overlay').classList.contains('hidden')) cancelEditItem();
   else if(!document.getElementById('preview-overlay').classList.contains('hidden')) closePreview();
   else if(!document.getElementById('overlay').classList.contains('hidden')) closeOverlay();
-  else if(!document.getElementById('dropbox-setup-overlay').classList.contains('hidden')) closeDropboxSetup();
 });
 // トースト：画面のどこをクリック/タップしても閉じる（OKボタン・15秒タイマーに加えてのフォールバック）
 document.addEventListener('click', () => {
