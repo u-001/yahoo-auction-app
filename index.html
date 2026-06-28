@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
 <title>ヤフオク出品アプリ</title>
 <style>
   :root {
@@ -2911,9 +2912,9 @@ async function exportZip(){
       catch(e){ showToast(`No.${noStr} の追加画像のDropboxアップロードに失敗しました。追加画像リンクなしで出力します。`); }
     }
     setExportStatus(`No.${noStr} のZIPを作成中...`);
-    const itemForCsv = {...item, desc: finalizeDescriptionWithDropboxUrl(item.desc, extraUrl)};
+    item.desc = finalizeDescriptionWithDropboxUrl(item.desc, extraUrl);
     const zip=new JSZip();
-    zip.file(String(item.no)+'.csv', '\uFEFF'+buildCSVHeader()+'\n'+buildCSV(itemForCsv));
+    zip.file(String(item.no)+'.csv', '\uFEFF'+buildCSVHeader()+'\n'+buildCSV(item));
     // Add main images (1-10) into ZIP using filenames shared with the CSV
     const imgs = item.imagesMainData || [];
     const filenames = buildMainImageFilenames(item);
