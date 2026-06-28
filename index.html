@@ -1404,6 +1404,7 @@ function restoreUI(){
       if(parseInt(b.dataset.v)===state.qty) b.classList.add('selected');
     });
   }
+  setAuction(state.isAuction);
   renderItemList();
   renderImagePreview('main');
   renderImagePreview('additional');
