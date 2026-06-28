@@ -2822,7 +2822,7 @@ async function dropboxGetOrCreateSharedLink(folderPath){
   throw new Error('Dropbox共有リンクの取得に失敗しました');
 }
 // 追加画像（11枚目以降）の保存先（フォルダ名が変わる場合はここだけ書き換える）
-const DROPBOX_EXTRA_BASE_PATH = '';
+const DROPBOX_EXTRA_BASE_PATH = '/追加画像一覧_URL発行済み_ヤフオク閲覧可能';
 // 追加画像（11枚目以降）をDropboxへアップロードし、フォルダの閲覧用共有リンクを返す
 async function uploadExtraImagesAndGetLink(item){
   const extra=item.imagesAdditionalData||[];
