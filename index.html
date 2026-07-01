@@ -1795,7 +1795,7 @@ function getGrooveDisplay(forTitle=false){
     if(forTitle){
       // 6分山以上のみ
       const num=parseFloat(val); if(isNaN(num)||num<6) return '';
-      return val+'分山';
+      return val.endsWith('分山') ? val : val+'分山';
     }
     return val;
   } else {
@@ -1804,7 +1804,7 @@ function getGrooveDisplay(forTitle=false){
       const s=document.getElementById('groove-'+i); if(!s) continue;
       let val=s.value;
       if(val==='その他'){ const o=document.getElementById('groove-other-'+i); val=o?o.value:''; }
-      lines.push(`①②③④⑤⑥`[i]+val+(forTitle?'分山':''));
+      lines.push(`①②③④⑤⑥`[i]+(forTitle ? (val.endsWith('分山') ? val : val+'分山') : val));
     }
     return lines.join('\n');
   }
