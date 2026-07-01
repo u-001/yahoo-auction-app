@@ -1219,28 +1219,30 @@ function handleImageFiles(files, type = 'main') {
   const imageArray = type === 'main' ? state.mainImages : state.additionalImages;
   const maxImages = type === 'main' ? 10 : 20;
   const remainingSlots = maxImages - imageArray.length;
-  let addedCount = 0;
-  
-  for (let file of files) {
-    if (file.type.startsWith('image/') && addedCount < remainingSlots) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const imageData = {
-          src: e.target.result,
-          name: file.name,
-          file: file
-        };
-        imageArray.push(imageData);
+  const filesToAdd = Array.from(files).filter(f => f.type.startsWith('image/')).slice(0, remainingSlots);
+
+  if (!filesToAdd.length) return;
+
+  const newImages = new Array(filesToAdd.length);
+  let doneCount = 0;
+
+  filesToAdd.forEach((file, idx) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      newImages[idx] = { src: e.target.result, name: file.name, file: file };
+      doneCount++;
+      if (doneCount === filesToAdd.length) {
+        imageArray.push(...newImages);
+        imageArray.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
         renderImagePreview(type);
         saveStorage();
-      };
-      reader.readAsDataURL(file);
-      addedCount++;
-    }
-  }
-  
-  if (imageArray.length >= maxImages) {
-    const msg = type === 'main' 
+      }
+    };
+    reader.readAsDataURL(file);
+  });
+
+  if (imageArray.length + filesToAdd.length >= maxImages) {
+    const msg = type === 'main'
       ? '画像は最大10枚までアップロードできます。'
       : '追加画像は最大20枚までアップロードできます。';
     showToast(msg);
@@ -3062,7 +3064,7 @@ function getCsvRow(item){
   r[35]='いいえ';       // 商品代引
   r[36]=item.condition||''; // 商品の状態
   r[37]='';             // 商品の状態備考
-  r[38]='可';           // 返品の可否
+  r[38]='返品不可';     // 返品の可否
   r[39]='発送後2週間以内に連絡いただければ返品理由により対応します。'; // 返品備考
   r[40]='はい';         // 入札者評価制限
   r[41]='はい';         // 悪い評価割合制限
