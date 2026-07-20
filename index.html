@@ -226,6 +226,31 @@
     z-index: 20;
   }
 
+  /* バックアップ履歴 */
+  #backup-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.6);
+    display: flex; align-items: center; justify-content: center; z-index: 200;
+  }
+  #backup-overlay.hidden { display: none; }
+  #backup-overlay-box {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 12px; padding: 24px; max-width: 480px; width: 95%;
+    max-height: 80vh; overflow-y: auto;
+  }
+  .backup-version-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    background: var(--bg3); border-radius: var(--radius-sm);
+    padding: 10px 12px; margin-bottom: 8px; font-size: .85rem;
+  }
+  .backup-version-row .backup-version-meta { color: var(--text2); }
+  .backup-version-row button {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); color: var(--text);
+    padding: 5px 12px; font-size: .8rem; cursor: pointer; font-family: inherit;
+    white-space: nowrap; transition: all .12s;
+  }
+  .backup-version-row button:hover { border-color: var(--accent); color: var(--accent); }
+
   /* Preview overlay (read-only item preview) */
   #preview-overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,.6);
@@ -1045,10 +1070,22 @@
     <h2>バックアップ</h2>
     <div class="sec-sub" id="backup-status">最終バックアップ: 確認中...</div>
     <div class="action-bar">
-      <button class="btn-secondary" onclick="restoreFromBackup()">バックアップから復元</button>
+      <button class="btn-secondary" onclick="openBackupHistoryModal()">バックアップから復元</button>
     </div>
   </section>
 </div><!-- /app -->
+
+<!-- バックアップ履歴 -->
+<div id="backup-overlay" class="hidden">
+  <div id="backup-overlay-box">
+    <h3>バックアップ履歴から復元</h3>
+    <p style="font-size:.85rem;color:var(--text2);margin-bottom:8px;">復元したい時点を選択してください。現在の商品リストは上書きされます。</p>
+    <div id="backup-version-list"></div>
+    <div class="action-bar">
+      <button class="btn-secondary" onclick="closeBackupOverlay()">閉じる</button>
+    </div>
+  </div>
+</div>
 
 <!-- Edit modal: 編集画面（新規出品フォームとは見た目を分離） -->
 <div id="edit-overlay" class="hidden"></div>
@@ -1424,10 +1461,11 @@ async function updateBackupStatus(){
   const el = document.getElementById('backup-status');
   if(!el) return;
   try {
-    const backup = await apiFetch('/api/backup');
-    if(backup && backup.savedAt){
-      const savedAt = new Date(backup.savedAt).toLocaleString('ja-JP');
-      el.textContent = `最終バックアップ: ${savedAt}（${(backup.items||[]).length}件）`;
+    const { versions } = await apiFetch('/api/backup/list');
+    const latest = (versions || [])[0];
+    if(latest && latest.savedAt){
+      const savedAt = new Date(latest.savedAt).toLocaleString('ja-JP');
+      el.textContent = `最終バックアップ: ${savedAt}（${latest.count}件）`;
     } else {
       el.textContent = 'バックアップはまだありません。';
     }
@@ -1435,14 +1473,47 @@ async function updateBackupStatus(){
     el.textContent = 'バックアップ状態を取得できませんでした。';
   }
 }
-async function restoreFromBackup(){
+// バックアップ履歴の一覧をモーダルで表示する
+async function openBackupHistoryModal(){
+  const listEl = document.getElementById('backup-version-list');
+  listEl.innerHTML = '<p style="color:var(--text2);font-size:.85rem;">読み込み中...</p>';
+  document.getElementById('backup-overlay').classList.remove('hidden');
+  let versions;
+  try {
+    const data = await apiFetch('/api/backup/list');
+    versions = data.versions || [];
+  } catch(e){
+    listEl.innerHTML = '<p style="color:var(--text2);font-size:.85rem;">バックアップ履歴の取得に失敗しました。</p>';
+    return;
+  }
+  if(!versions.length){
+    listEl.innerHTML = '<p style="color:var(--text2);font-size:.85rem;">バックアップ履歴がありません。</p>';
+    return;
+  }
+  listEl.innerHTML = '';
+  versions.forEach(ver=>{
+    const savedAtStr = ver.savedAt ? new Date(ver.savedAt).toLocaleString('ja-JP') : '日時不明';
+    const row = document.createElement('div');
+    row.className = 'backup-version-row';
+    row.innerHTML = `<span class="backup-version-meta">${savedAtStr}　${ver.count}件</span>`;
+    const btn = document.createElement('button');
+    btn.textContent = 'この版を復元';
+    btn.onclick = () => restoreBackupVersion(ver.slot, savedAtStr, ver.count);
+    row.appendChild(btn);
+    listEl.appendChild(row);
+  });
+}
+function closeBackupOverlay(){
+  document.getElementById('backup-overlay').classList.add('hidden');
+}
+async function restoreBackupVersion(slot, savedAtStr, count){
+  if (!await customConfirm(`${savedAtStr} 時点のバックアップ（${count}件）から復元しますか？\n現在の商品リストは上書きされます。`)) return;
+  closeBackupOverlay();
   let backup;
   try {
-    backup = await apiFetch('/api/backup');
+    backup = await apiFetch('/api/backup/version?slot=' + slot);
   } catch(e){ showToast('バックアップの取得に失敗しました。'); return; }
   if (!backup || !backup.items) { showToast('バックアップデータが見つかりません。'); return; }
-  const savedAt = backup.savedAt ? new Date(backup.savedAt).toLocaleString('ja-JP') : '不明';
-  if (!await customConfirm(`${savedAt} 時点のバックアップ（${backup.items.length}件）から復元しますか？\n現在の商品リストは上書きされます。`)) return;
   state.items = backup.items;
   state.nextNo = backup.nextNo || 1;
   state.usedNos = backup.usedNos || [];
@@ -1456,6 +1527,7 @@ async function restoreFromBackup(){
     hideSubmittingOverlay();
   }
   showToast(`${state.items.length}件のデータを復元しました。`);
+  updateBackupStatus();
 }
 function loadStorage(){
   try {
@@ -3401,11 +3473,15 @@ document.getElementById('preview-overlay').addEventListener('click',(e)=>{
 document.getElementById('overlay').addEventListener('click',(e)=>{
   if(e.target.id==='overlay') closeOverlay();
 });
+document.getElementById('backup-overlay').addEventListener('click',(e)=>{
+  if(e.target.id==='backup-overlay') closeBackupOverlay();
+});
 document.addEventListener('keydown',(e)=>{
   if(e.key!=='Escape') return;
   if(!document.getElementById('edit-overlay').classList.contains('hidden')) cancelEditItem();
   else if(!document.getElementById('preview-overlay').classList.contains('hidden')) closePreview();
   else if(!document.getElementById('overlay').classList.contains('hidden')) closeOverlay();
+  else if(!document.getElementById('backup-overlay').classList.contains('hidden')) closeBackupOverlay();
 });
 // トースト：画面のどこをクリック/タップしても閉じる（OKボタン・15秒タイマーに加えてのフォールバック）
 document.addEventListener('click', () => {
