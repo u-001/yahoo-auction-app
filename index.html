@@ -367,6 +367,21 @@
   @media (max-width: 520px) {
     #sticky-action-bar:not(.hidden) { display: flex; }
   }
+  /* 上へ戻るボタン：入力の妨げにならないよう小さく・半透明・スクロール時のみ表示 */
+  #scroll-top-btn {
+    position: fixed; right: 14px; bottom: 20px; z-index: 140;
+    width: 38px; height: 38px; border-radius: 50%;
+    background: rgba(79,142,247,.5); color: #fff; border: none;
+    font-size: 15px; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; opacity: 0; pointer-events: none;
+    transition: opacity .2s, background .2s;
+  }
+  #scroll-top-btn.visible { opacity: .7; pointer-events: auto; }
+  #scroll-top-btn:hover { opacity: 1; background: rgba(79,142,247,.85); }
+  @media (max-width: 520px) {
+    #scroll-top-btn { bottom: calc(74px + env(safe-area-inset-bottom)); }
+  }
   /* Subsection */
   .subsec { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; margin-top: 8px; }
   .subsec-title { font-size: .82rem; color: var(--text2); font-weight: 700; margin-bottom: 10px; }
@@ -1245,6 +1260,9 @@
 <div id="sticky-action-bar" class="hidden">
   <button type="button" class="btn-primary" id="sticky-add-btn" onclick="document.getElementById('add-update-btn').click()">商品リストに追加</button>
 </div>
+
+<!-- 上へ戻るボタン（ある程度スクロールしたときだけ表示） -->
+<button type="button" id="scroll-top-btn" onclick="window.scrollTo({top:0,behavior:'smooth'})" title="上へ戻る" aria-label="上へ戻る">↑</button>
 
 <!-- 送信中：画面全体を覆って操作不可にするオーバーレイ -->
 <div id="submitting-overlay" class="hidden">
@@ -3764,6 +3782,10 @@ document.addEventListener('keydown',(e)=>{
 document.addEventListener('click', () => {
   if(!document.getElementById('toast').classList.contains('hidden')) hideToast();
 }, true);
+// 上へ戻るボタン：ある程度スクロールしたときだけ表示する
+window.addEventListener('scroll', () => {
+  document.getElementById('scroll-top-btn')?.classList.toggle('visible', window.scrollY > 400);
+}, { passive: true });
 </script>
 </body>
 </html>
