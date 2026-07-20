@@ -2617,6 +2617,7 @@ function renderItemList(){
       <div class="item-btns">
         <button onclick="previewItem(${idx})">プレビュー</button>
         ${editBtn}
+        <button onclick="duplicateItem(${idx})">複製</button>
         <button class="del" onclick="deleteItem(${idx})">削除</button>
       </div>`;
     // drag
@@ -2779,6 +2780,31 @@ async function editItem(idx){
   // 編集画面を新規出品フォームと分離したモーダルとして表示
   enterEditModal(item.no);
   updatePreview();
+}
+
+// ===== 商品の複製（似た商品を連続で出品する際、直前の実データから新規入力を始める） =====
+// 画像は引き継がない（実物が別のため再アップロードが必要）。日付・価格はそのままコピーする。
+async function duplicateItem(idx){
+  const item=state.items[idx];
+  if(!await customConfirm(`No.${String(item.no).padStart(2,'0')} の内容を複製して新規入力を開始します。現在のフォーム入力内容は失われます。よろしいですか？`)) return;
+  state.editingIdx=null;
+  setType(item.type, true);
+  if(item.formData) applyFormData(item.formData);
+  state.mainImages=[];
+  state.additionalImages=[];
+  renderImagePreview('main');
+  renderImagePreview('additional');
+  const addBtn=document.getElementById('add-update-btn');
+  if(addBtn){ addBtn.textContent='商品リストに追加'; addBtn.onclick=addItem; }
+  const noEl=document.getElementById('f-item-no');
+  if(noEl) noEl.value=state.nextNo;
+  document.getElementById('no-badge').textContent='出品No. '+String(state.nextNo).padStart(2,'0');
+  onItemNoInput();
+  clearErrors();
+  updatePreview();
+  saveStorage();
+  document.getElementById('form-section-title').scrollIntoView({behavior:'smooth',block:'start'});
+  showToast(`No.${String(item.no).padStart(2,'0')} の内容を複製しました（画像は引き継がれません）。`);
 }
 
 // ===== テンプレート（よく使う組み合わせの保存・呼び出し） =====
