@@ -512,6 +512,14 @@
     </div>
 
     <!-- 基本情報 -->
+    <div class="field" style="margin-bottom:10px;">
+      <label>出品No</label>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span style="color:var(--text2);font-weight:700;">No.</span>
+        <input type="number" id="f-item-no" min="1" step="1" oninput="onItemNoInput()" style="max-width:100px;">
+      </div>
+      <div class="err-msg" id="item-no-err">この出品Noはすでに使用されています</div>
+    </div>
     <div class="row2">
       <div class="field">
         <label>入力日<span class="req">*</span></label>
@@ -1026,6 +1034,7 @@
     </div>
     <div class="action-bar">
       <button class="btn-primary" onclick="showConfirm()">ZIP出力確認</button>
+      <button class="btn-secondary" onclick="restoreFromBackup()">バックアップから復元</button>
       <button class="btn-danger" onclick="resetAllData()">すべて初期化</button>
     </div>
   </section>
@@ -1351,6 +1360,8 @@ window.onload = () => {
   // 共有の商品リストを取得し、ローカルの一覧を最新の内容に置き換える
   loadSharedItems().then(()=>{
     renderItemList();
+    const _noEl = document.getElementById('f-item-no');
+    if (_noEl) _noEl.value = state.nextNo;
     document.getElementById('no-badge').textContent='出品No. '+String(state.nextNo).padStart(2,'0');
   });
 };
@@ -1372,6 +1383,50 @@ function saveStorage(){
     };
     localStorage.setItem('yauction_state', JSON.stringify(toSave));
   } catch(e){}
+}
+function onItemNoInput(){
+  const input = document.getElementById('f-item-no');
+  const val = parseInt(input.value);
+  const no = (!isNaN(val) && val >= 1) ? val : state.nextNo;
+  document.getElementById('no-badge').textContent = '出品No. ' + String(no).padStart(2, '0');
+  const isDup = !isNaN(val) && val >= 1 && state.usedNos.includes(val);
+  const errEl = document.getElementById('item-no-err');
+  if (errEl) errEl.style.display = isDup ? 'block' : 'none';
+}
+async function saveBackup(){
+  try {
+    const items = (state.items || []).map(({ imagesMainData, imagesAdditionalData, ...rest }) => rest);
+    await apiFetch('/api/backup', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items, nextNo: state.nextNo, usedNos: state.usedNos, savedAt: new Date().toISOString() })
+    });
+  } catch(e){ console.warn('バックアップ保存失敗:', e); }
+}
+async function deleteBackup(){
+  try { await apiFetch('/api/backup', { method: 'DELETE' }); } catch(e){}
+}
+async function restoreFromBackup(){
+  let backup;
+  try {
+    backup = await apiFetch('/api/backup');
+  } catch(e){ showToast('バックアップの取得に失敗しました。'); return; }
+  if (!backup || !backup.items) { showToast('バックアップデータが見つかりません。'); return; }
+  const savedAt = backup.savedAt ? new Date(backup.savedAt).toLocaleString('ja-JP') : '不明';
+  if (!await customConfirm(`${savedAt} 時点のバックアップ（${backup.items.length}件）から復元しますか？\n現在の商品リストは上書きされます。`)) return;
+  state.items = backup.items;
+  state.nextNo = backup.nextNo || 1;
+  state.usedNos = backup.usedNos || [];
+  renderItemList();
+  saveStorage();
+  showSubmittingOverlay('サーバーに復元中...');
+  try {
+    for (const item of state.items) { await saveSharedItem(item); }
+    await saveSharedMeta();
+  } finally {
+    hideSubmittingOverlay();
+  }
+  showToast(`${state.items.length}件のデータを復元しました。`);
 }
 function loadStorage(){
   try {
@@ -2157,8 +2212,20 @@ async function addItem(){
   if(_addBtn){ _addBtn.disabled = true; _addBtn.textContent = '送信中...'; }
   setFormSubmittingUI(true);
   showSubmittingOverlay('商品を送信中...');
-  const no=state.nextNo;
-  state.nextNo++;
+  const noInputEl = document.getElementById('f-item-no');
+  const noInputVal = parseInt(noInputEl?.value);
+  const no = (!isNaN(noInputVal) && noInputVal >= 1) ? noInputVal : state.nextNo;
+  if (state.usedNos.includes(no)) {
+    const errEl = document.getElementById('item-no-err');
+    if (errEl) errEl.style.display = 'block';
+    noInputEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    isSubmittingItem = false;
+    if (_addBtn) { _addBtn.disabled = false; _addBtn.textContent = '商品リストに追加'; }
+    setFormSubmittingUI(false);
+    hideSubmittingOverlay();
+    return;
+  }
+  if (no >= state.nextNo) state.nextNo = no + 1;
   state.usedNos.push(no);
   const title=document.getElementById('f-title').value;
   const desc=buildDescription(no);
@@ -2202,6 +2269,7 @@ async function addItem(){
   item.pending = false;
   renderItemList();
   saveStorage();
+  saveBackup();
   showToast(`出品No.${String(no).padStart(2,'0')} を追加しました。`);
   resetFormData();
   } finally {
@@ -2376,6 +2444,7 @@ async function deleteItem(idx){
   const no=state.items[idx].no;
   state.items.splice(idx,1); renderItemList(); saveStorage();
   deleteSharedItem(no);
+  saveBackup();
 }
 async function editItem(idx){
   const item=state.items[idx];
@@ -2557,6 +2626,8 @@ function enterEditModal(no){
   document.getElementById('form-section-title').textContent='商品編集';
   document.getElementById('edit-mode-bar').classList.remove('hidden');
   document.getElementById('edit-mode-no').textContent='No.'+String(no).padStart(2,'0');
+  const _noEditEl = document.getElementById('f-item-no');
+  if (_noEditEl) { _noEditEl.value = no; _noEditEl.readOnly = true; _noEditEl.style.opacity = '0.5'; }
 }
 function exitEditModal(){
   const overlay=document.getElementById('edit-overlay');
@@ -2567,6 +2638,9 @@ function exitEditModal(){
   overlay.classList.add('hidden');
   document.getElementById('form-section-title').textContent='新規出品';
   document.getElementById('edit-mode-bar').classList.add('hidden');
+  const _noExitEl = document.getElementById('f-item-no');
+  if (_noExitEl) { _noExitEl.readOnly = false; _noExitEl.style.opacity = ''; _noExitEl.value = state.nextNo; }
+  document.getElementById('no-badge').textContent='出品No. '+String(state.nextNo).padStart(2,'0');
 }
 async function cancelEditItem(){
   if(!await customConfirm('編集を中止しますか？入力内容は破棄されます。')) return;
@@ -2630,6 +2704,9 @@ function resetFormData(keepImages){
   updatePunctureNumBtns(); updateSize3Btns(); updateKuchiBtns();
   clearErrors();
   document.getElementById('f-date').value=todayStr;
+  const _noEl = document.getElementById('f-item-no');
+  if (_noEl) _noEl.value = state.nextNo;
+  document.getElementById('item-no-err').style.display = 'none';
   document.getElementById('no-badge').textContent='出品No. '+String(state.nextNo).padStart(2,'0');
   if(!keepImages){
     state.mainImages=[];
@@ -2661,6 +2738,7 @@ async function resetAllData(){
     // 共有データへの削除は同時に投げず、1件ずつ順番に処理する（meta書き込みの衝突を避けるため）
     for(const no of nosToDelete){ await deleteSharedItem(no); }
     await saveSharedMeta();
+    await deleteBackup();
   } finally {
     hideSubmittingOverlay();
   }
@@ -2951,6 +3029,7 @@ async function exportZip(){
   closeOverlay();
   renderItemList();
   saveStorage();
+  saveBackup();
   if(dropboxErrorMsg){
     showToast(`ZIP出力完了（Dropboxエラーあり）: ${dropboxErrorMsg}`, 60000);
   } else {
