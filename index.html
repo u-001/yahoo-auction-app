@@ -430,9 +430,31 @@
     height: auto;
     display: block;
     -webkit-user-drag: none;
+    -webkit-touch-callout: none;
     user-select: none;
     cursor: zoom-in;
   }
+  /* 並び替え用ドラッグハンドル：マウス・タッチ・ペン共通のPointer Eventsで操作 */
+  .image-preview-handle {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(0,0,0,.45);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    cursor: grab;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    z-index: 2;
+  }
+  .image-preview-handle:active { cursor: grabbing; }
   .image-preview-remove {
     position: absolute;
     top: 4px;
@@ -1317,7 +1339,6 @@ let state = {
 // ===== IMAGE UPLOAD =====
 function initImageUpload() {
   initUnifiedImageUpload();
-  initImagePreviewDropTargets();
 }
 // 一括投入された画像を、ファイル名順に1〜10枚目→メイン画像、11枚目以降→追加画像へ自動振り分け
 function initUnifiedImageUpload() {
@@ -1347,20 +1368,54 @@ function handleUnifiedImageFiles(fileList) {
   if (additionalFiles.length) handleImageFiles(additionalFiles, 'additional');
 }
 
-// プレビューコンテナの「何もないところ」へのドロップ（末尾へ追加・別リストへの移動）を受け止める
-let dragState = null;
-function initImagePreviewDropTargets() {
-  [['main','mainImagePreviewContainer'], ['additional','additionalImagePreviewContainer']].forEach(([type, containerId]) => {
-    const container = document.getElementById(containerId);
-    container.addEventListener('dragover', (e) => { e.preventDefault(); });
-    container.addEventListener('drop', (e) => {
-      e.preventDefault();
-      if (!dragState) return;
-      const destArr = type === 'main' ? state.mainImages : state.additionalImages;
-      moveImageBetween(dragState.type, dragState.idx, type, destArr.length);
-      dragState = null;
-    });
-  });
+// 画像の並び替えドラッグ（Pointer Eventsベース：マウス・タッチ・ペン共通で動作するため、スマホ/タブレットでもドラッグできる）
+let ptrDrag = null; // { type, idx, el }
+function startImageDrag(e, itemDiv, type, idx){
+  e.preventDefault();
+  try{ itemDiv.setPointerCapture(e.pointerId); }catch(err){}
+  ptrDrag = { type, idx, el: itemDiv, pointerId: e.pointerId };
+  itemDiv.classList.add('dragging');
+  document.addEventListener('pointermove', onImageDragMove);
+  document.addEventListener('pointerup', onImageDragEnd);
+  document.addEventListener('pointercancel', onImageDragEnd);
+}
+function findDropTarget(x, y){
+  const el = document.elementFromPoint(x, y);
+  if(!el) return null;
+  const item = el.closest('.image-preview-item');
+  if(item) return item;
+  return el.closest('.image-preview-container');
+}
+function onImageDragMove(e){
+  if(!ptrDrag) return;
+  document.querySelectorAll('.image-preview-item.drag-over').forEach(el=>el.classList.remove('drag-over'));
+  const target = findDropTarget(e.clientX, e.clientY);
+  if(target && target.classList.contains('image-preview-item') && target !== ptrDrag.el){
+    target.classList.add('drag-over');
+  }
+}
+function onImageDragEnd(e){
+  if(!ptrDrag) return;
+  document.removeEventListener('pointermove', onImageDragMove);
+  document.removeEventListener('pointerup', onImageDragEnd);
+  document.removeEventListener('pointercancel', onImageDragEnd);
+  ptrDrag.el.classList.remove('dragging');
+  document.querySelectorAll('.image-preview-item.drag-over').forEach(el=>el.classList.remove('drag-over'));
+  const target = findDropTarget(e.clientX, e.clientY);
+  const { type, idx } = ptrDrag;
+  ptrDrag = null;
+  if(!target) return;
+  if(target.classList.contains('image-preview-item')){
+    if(target.dataset.index === undefined) return;
+    const destContainer = target.closest('.image-preview-container');
+    const destType = destContainer.id === 'mainImagePreviewContainer' ? 'main' : 'additional';
+    const destIdx = parseInt(target.dataset.index, 10);
+    moveImageBetween(type, idx, destType, destIdx);
+  } else if(target.classList.contains('image-preview-container')){
+    const destType = target.id === 'mainImagePreviewContainer' ? 'main' : 'additional';
+    const destArr = destType === 'main' ? state.mainImages : state.additionalImages;
+    moveImageBetween(type, idx, destType, destArr.length);
+  }
 }
 // 画像をリスト内で入れ替え、または別リスト（メイン⇔追加）へ移動する
 function moveImageBetween(srcType, srcIdx, destType, destIdx) {
@@ -1438,9 +1493,9 @@ function renderImagePreview(type = 'main') {
   imageArray.forEach((img, idx) => {
     const itemDiv = document.createElement('div');
     itemDiv.className = 'image-preview-item';
-    itemDiv.draggable = true;
     itemDiv.dataset.index = idx;
     itemDiv.innerHTML = `
+      <div class="image-preview-handle" title="ドラッグで並び替え">⠿</div>
       <img src="${img.src}" alt="preview" draggable="false">
       <button type="button" class="image-preview-remove" onclick="removeImage(${idx}, '${type}')" title="削除">&times;</button>
       <div class="image-preview-controls">
@@ -1454,39 +1509,9 @@ function renderImagePreview(type = 'main') {
       openImageLightbox(img.src, img.name || '');
     });
 
-    // ドラッグ&ドロップイベント（メイン画像⇔追加画像の間でも移動可能）
-    itemDiv.addEventListener('dragstart', (e) => {
-      dragState = { type, idx };
-      itemDiv.classList.add('dragging');
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', type + ':' + idx);
-    });
-
-    itemDiv.addEventListener('dragend', () => {
-      itemDiv.classList.remove('dragging');
-      document.querySelectorAll('.image-preview-item').forEach(el => {
-        el.classList.remove('drag-over');
-      });
-      dragState = null;
-    });
-
-    itemDiv.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      itemDiv.classList.add('drag-over');
-    });
-
-    itemDiv.addEventListener('dragleave', () => {
-      itemDiv.classList.remove('drag-over');
-    });
-
-    itemDiv.addEventListener('drop', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      itemDiv.classList.remove('drag-over');
-      if (!dragState) return;
-      moveImageBetween(dragState.type, dragState.idx, type, idx);
-      dragState = null;
+    // ドラッグハンドルからのPointer Events操作で並び替え（マウス・タッチ共通。メイン⇔追加画像の間でも移動可能）
+    itemDiv.querySelector('.image-preview-handle').addEventListener('pointerdown', (e) => {
+      startImageDrag(e, itemDiv, type, idx);
     });
 
     container.appendChild(itemDiv);
