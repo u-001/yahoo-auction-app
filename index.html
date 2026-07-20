@@ -501,6 +501,16 @@
       <div class="image-count" id="additionalImageCount">0/20</div>
     </div>
 
+    <!-- 基本情報 -->
+    <div class="field" style="margin-bottom:10px;">
+      <label>出品No</label>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span style="color:var(--text2);font-weight:700;">No.</span>
+        <input type="number" id="f-item-no" min="1" step="1" oninput="onItemNoInput()" style="max-width:100px;">
+      </div>
+      <div class="err-msg" id="item-no-err">この出品Noはすでに使用されています</div>
+    </div>
+
     <!-- 出品タイプ -->
     <div class="field">
       <label>出品タイプ<span class="req">*</span></label>
@@ -512,15 +522,6 @@
       </div>
     </div>
 
-    <!-- 基本情報 -->
-    <div class="field" style="margin-bottom:10px;">
-      <label>出品No</label>
-      <div style="display:flex;align-items:center;gap:6px;">
-        <span style="color:var(--text2);font-weight:700;">No.</span>
-        <input type="number" id="f-item-no" min="1" step="1" oninput="onItemNoInput()" style="max-width:100px;">
-      </div>
-      <div class="err-msg" id="item-no-err">この出品Noはすでに使用されています</div>
-    </div>
     <div class="row2">
       <div class="field">
         <label>入力日<span class="req">*</span></label>
