@@ -1977,6 +1977,11 @@ function getSize(i=0){
   return '';
 }
 function v(id){ const el=document.getElementById(id); return el?el.value.trim():''; }
+// 金額をUI表示用に3桁区切りにする（CSV等の出力データには適用しない）
+function formatYen(n){
+  const num = Number(n);
+  return (n===''||n==null||isNaN(num)) ? String(n) : num.toLocaleString('ja-JP');
+}
 
 function getMakerShort(){
   const m=v('f-maker');
@@ -2379,7 +2384,7 @@ async function addItem(){
   const title=document.getElementById('f-title').value;
   const desc=buildDescription(no);
   const price=state.isAuction ? (v('f-start-price')||0) : (v('f-fixed-price')||0);
-  const priceLabel=state.isAuction ? `${v('f-start-price')||'-'}円〜` : `${v('f-fixed-price')||'-'}円`;
+  const priceLabel=state.isAuction ? `${formatYen(v('f-start-price'))||'-'}円〜` : `${formatYen(v('f-fixed-price'))||'-'}円`;
   const typeLabel={'tire':'タイヤのみ','wheel':'ホイールのみ','set':'セット','cap':'キャップ'}[state.type];
   const formData=captureFormData();
   const item={
@@ -2450,7 +2455,7 @@ async function updateItem(){
   item.startPrice=v('f-start-price'); item.buynowPrice=v('f-buynow-price');
   item.fixedPrice=v('f-fixed-price');
   item.isAuction=state.isAuction;
-  item.priceLabel=state.isAuction ? `${v('f-start-price')||'-'}円〜` : `${v('f-fixed-price')||'-'}円`;
+  item.priceLabel=state.isAuction ? `${formatYen(v('f-start-price'))||'-'}円〜` : `${formatYen(v('f-fixed-price'))||'-'}円`;
   item.condition=state.sel['cond'];
   item.carrier=state.carrier; item.size3=state.size3; item.kuchi=state.kuchi;
   item.capCarrier=state.sel['cap-carrier'];
@@ -2730,8 +2735,8 @@ function previewItem(idx){
   const metaEl = document.getElementById('preview-meta');
   const formatLabel = item.isAuction ? 'オークション' : '定額';
   const priceText = item.isAuction
-    ? `開始${item.startPrice||'-'}円${item.buynowPrice?` / 即決${item.buynowPrice}円`:''}`
-    : `${item.fixedPrice||'-'}円`;
+    ? `開始${formatYen(item.startPrice)||'-'}円${item.buynowPrice?` / 即決${formatYen(item.buynowPrice)}円`:''}`
+    : `${formatYen(item.fixedPrice)||'-'}円`;
   metaEl.innerHTML = `<span>商品状態：${item.condition||'-'}</span><span>出品形式：${formatLabel}</span><span style="color:var(--success);font-weight:700;">${priceText}</span>`;
   // images (main first, then additional)
   const imgsEl = document.getElementById('preview-images'); imgsEl.innerHTML='';
