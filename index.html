@@ -631,7 +631,6 @@
       <div style="display:flex;gap:6px;flex-wrap:wrap;">
         <select id="f-template" style="flex:1;min-width:160px;"><option value="">テンプレートを選択...</option></select>
         <button type="button" class="btn-secondary" onclick="applyTemplate()">適用</button>
-        <button type="button" class="btn-secondary" onclick="saveCurrentAsTemplate()">現在の内容を保存</button>
         <button type="button" class="btn-danger" onclick="deleteSelectedTemplate()">削除</button>
       </div>
       <div class="sec-sub" style="margin-top:6px;margin-bottom:0;">出品タイプ・サイズ・メーカーなどの仕様を呼び出せます（出品No・日付・価格は含みません）</div>
@@ -1177,6 +1176,7 @@
     <div class="action-bar" id="form-action-bar">
       <button class="btn-primary" id="add-update-btn" onclick="addItem()">商品リストに追加</button>
       <button class="btn-secondary" onclick="resetForm()">フォームをリセット</button>
+      <button class="btn-secondary" onclick="saveCurrentAsTemplate()">テンプレートとして保存</button>
     </div>
   </section>
 
