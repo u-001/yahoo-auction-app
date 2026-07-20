@@ -1042,6 +1042,7 @@
   <!-- バックアップ -->
   <section class="card">
     <h2>バックアップ</h2>
+    <div class="sec-sub" id="backup-status">最終バックアップ: 確認中...</div>
     <div class="action-bar">
       <button class="btn-secondary" onclick="restoreFromBackup()">バックアップから復元</button>
     </div>
@@ -1372,6 +1373,7 @@ window.onload = () => {
     if (_noEl) _noEl.value = state.nextNo;
     document.getElementById('no-badge').textContent='出品No. '+String(state.nextNo).padStart(2,'0');
   });
+  updateBackupStatus();
 };
 
 function buildWheelInchSelect(){
@@ -1409,10 +1411,28 @@ async function saveBackup(){
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ items, nextNo: state.nextNo, usedNos: state.usedNos, savedAt: new Date().toISOString() })
     });
+    updateBackupStatus();
   } catch(e){ console.warn('バックアップ保存失敗:', e); }
 }
 async function deleteBackup(){
   try { await apiFetch('/api/backup', { method: 'DELETE' }); } catch(e){}
+  updateBackupStatus();
+}
+// バックアップカードに最終保存日時・件数を表示する
+async function updateBackupStatus(){
+  const el = document.getElementById('backup-status');
+  if(!el) return;
+  try {
+    const backup = await apiFetch('/api/backup');
+    if(backup && backup.savedAt){
+      const savedAt = new Date(backup.savedAt).toLocaleString('ja-JP');
+      el.textContent = `最終バックアップ: ${savedAt}（${(backup.items||[]).length}件）`;
+    } else {
+      el.textContent = 'バックアップはまだありません。';
+    }
+  } catch(e){
+    el.textContent = 'バックアップ状態を取得できませんでした。';
+  }
 }
 async function restoreFromBackup(){
   let backup;
