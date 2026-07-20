@@ -350,6 +350,23 @@
     section.card, details.card { padding: 14px 12px; }
     .item-row { flex-wrap: wrap; }
   }
+  /* スマホ向け：フォームの送信ボタンをスクロール中も画面下部に固定表示 */
+  #sticky-action-bar {
+    display: none;
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 150;
+    justify-content: center;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    background: linear-gradient(to top, var(--bg) 55%, transparent);
+    pointer-events: none;
+  }
+  #sticky-action-bar button {
+    pointer-events: auto;
+    width: 100%; max-width: 420px;
+    box-shadow: 0 4px 20px rgba(0,0,0,.35);
+  }
+  @media (max-width: 520px) {
+    #sticky-action-bar:not(.hidden) { display: flex; }
+  }
   /* Subsection */
   .subsec { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; margin-top: 8px; }
   .subsec-title { font-size: .82rem; color: var(--text2); font-weight: 700; margin-bottom: 10px; }
@@ -1103,7 +1120,7 @@
     </div>
 
     <!-- アクションバー -->
-    <div class="action-bar">
+    <div class="action-bar" id="form-action-bar">
       <button class="btn-primary" id="add-update-btn" onclick="addItem()">商品リストに追加</button>
       <button class="btn-secondary" onclick="resetForm()">フォームをリセット</button>
     </div>
@@ -1222,6 +1239,11 @@
 <div id="image-lightbox-overlay" class="hidden" onclick="closeImageLightbox()">
   <button type="button" id="image-lightbox-close" onclick="closeImageLightbox()" title="閉じる">&times;</button>
   <img id="image-lightbox-img" src="" alt="">
+</div>
+
+<!-- スマホ向け：フォームの送信ボタンをスクロール中も画面下部に固定表示 -->
+<div id="sticky-action-bar" class="hidden">
+  <button type="button" class="btn-primary" id="sticky-add-btn" onclick="document.getElementById('add-update-btn').click()">商品リストに追加</button>
 </div>
 
 <!-- 送信中：画面全体を覆って操作不可にするオーバーレイ -->
@@ -1375,7 +1397,7 @@ function handleImageFiles(files, type = 'main') {
 
   if (imageArray.length + filesToAdd.length >= maxImages) {
     const msg = type === 'main'
-      ? '画像は最大10枚までアップロードできます。'
+      ? '1〜10枚目がメイン画像になります。11枚目以降は自動的に追加画像に振り分けられます。'
       : '追加画像は最大20枚までアップロードできます。';
     showToast(msg);
   }
@@ -1494,7 +1516,27 @@ window.onload = () => {
   });
   updateBackupStatus();
   renderTemplateSelect();
+  initStickyActionBar();
 };
+
+// スマホ向け：本来の送信ボタン（#form-action-bar）が画面外にあるときだけ、下部固定バーを表示する
+function initStickyActionBar(){
+  const target = document.getElementById('form-action-bar');
+  const stickyBar = document.getElementById('sticky-action-bar');
+  const stickyBtn = document.getElementById('sticky-add-btn');
+  const realBtn = document.getElementById('add-update-btn');
+  if(!target || !stickyBar || !stickyBtn || !realBtn) return;
+  const syncBtn = () => {
+    stickyBtn.textContent = realBtn.textContent;
+    stickyBtn.disabled = realBtn.disabled;
+  };
+  syncBtn();
+  new MutationObserver(syncBtn).observe(realBtn, { attributes:true, childList:true, characterData:true, subtree:true });
+  const io = new IntersectionObserver((entries) => {
+    stickyBar.classList.toggle('hidden', entries[0].isIntersecting);
+  }, { threshold: 0 });
+  io.observe(target);
+}
 
 function buildWheelInchSelect(){
   const sel = document.getElementById('f-w-inch');
