@@ -455,6 +455,23 @@
     z-index: 2;
   }
   .image-preview-handle:active { cursor: grabbing; }
+  /* ドラッグ中に指/カーソルへ追従するゴースト（動いている実感を出すためのフィードバック） */
+  #image-drag-ghost {
+    position: fixed;
+    top: 0; left: 0;
+    width: 64px; height: 64px;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 8px 24px rgba(0,0,0,.45);
+    border: 2px solid var(--accent);
+    pointer-events: none;
+    opacity: .92;
+    z-index: 900;
+    transform: translate(-50%, -130%);
+  }
+  #image-drag-ghost img {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+  }
   .image-preview-remove {
     position: absolute;
     top: 4px;
@@ -1370,11 +1387,33 @@ function handleUnifiedImageFiles(fileList) {
 
 // 画像の並び替えドラッグ（Pointer Eventsベース：マウス・タッチ・ペン共通で動作するため、スマホ/タブレットでもドラッグできる）
 let ptrDrag = null; // { type, idx, el }
+let dragGhostEl = null;
+// ドラッグ中、指/カーソルの少し上に画像のミニチュアを追従させる（動いている最中の視覚フィードバック）
+function createDragGhost(itemDiv, x, y){
+  const img = itemDiv.querySelector('img');
+  if(!img) return;
+  dragGhostEl = document.createElement('div');
+  dragGhostEl.id = 'image-drag-ghost';
+  const cloneImg = document.createElement('img');
+  cloneImg.src = img.src;
+  dragGhostEl.appendChild(cloneImg);
+  document.body.appendChild(dragGhostEl);
+  moveDragGhost(x, y);
+}
+function moveDragGhost(x, y){
+  if(!dragGhostEl) return;
+  dragGhostEl.style.left = x + 'px';
+  dragGhostEl.style.top = y + 'px';
+}
+function removeDragGhost(){
+  if(dragGhostEl){ dragGhostEl.remove(); dragGhostEl = null; }
+}
 function startImageDrag(e, itemDiv, type, idx){
   e.preventDefault();
   try{ itemDiv.setPointerCapture(e.pointerId); }catch(err){}
   ptrDrag = { type, idx, el: itemDiv, pointerId: e.pointerId };
   itemDiv.classList.add('dragging');
+  createDragGhost(itemDiv, e.clientX, e.clientY);
   document.addEventListener('pointermove', onImageDragMove);
   document.addEventListener('pointerup', onImageDragEnd);
   document.addEventListener('pointercancel', onImageDragEnd);
@@ -1388,6 +1427,7 @@ function findDropTarget(x, y){
 }
 function onImageDragMove(e){
   if(!ptrDrag) return;
+  moveDragGhost(e.clientX, e.clientY);
   document.querySelectorAll('.image-preview-item.drag-over').forEach(el=>el.classList.remove('drag-over'));
   const target = findDropTarget(e.clientX, e.clientY);
   if(target && target.classList.contains('image-preview-item') && target !== ptrDrag.el){
@@ -1400,6 +1440,7 @@ function onImageDragEnd(e){
   document.removeEventListener('pointerup', onImageDragEnd);
   document.removeEventListener('pointercancel', onImageDragEnd);
   ptrDrag.el.classList.remove('dragging');
+  removeDragGhost();
   document.querySelectorAll('.image-preview-item.drag-over').forEach(el=>el.classList.remove('drag-over'));
   const target = findDropTarget(e.clientX, e.clientY);
   const { type, idx } = ptrDrag;
