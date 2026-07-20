@@ -536,6 +536,18 @@
       <button type="button" onclick="cancelEditItem()">✕ 編集を中止</button>
     </div>
 
+    <!-- テンプレート（よく使う組み合わせの呼び出し） -->
+    <div class="field">
+      <label>テンプレート</label>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <select id="f-template" style="flex:1;min-width:160px;"><option value="">テンプレートを選択...</option></select>
+        <button type="button" class="btn-secondary" onclick="applyTemplate()">適用</button>
+        <button type="button" class="btn-secondary" onclick="saveCurrentAsTemplate()">現在の内容を保存</button>
+        <button type="button" class="btn-danger" onclick="deleteSelectedTemplate()">削除</button>
+      </div>
+      <div class="sec-sub" style="margin-top:6px;margin-bottom:0;">出品タイプ・サイズ・メーカーなどの仕様を呼び出せます（出品No・日付・価格は含みません）</div>
+    </div>
+
     <!-- 画像アップロード（一括投入→自動振り分け） -->
     <div class="field">
       <label>商品画像</label>
@@ -1176,6 +1188,18 @@
   </div>
 </div>
 
+<!-- カスタム入力ダイアログ（テンプレート名などの入力用） -->
+<div id="custom-prompt-overlay" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:700;">
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px 28px;max-width:420px;width:92%;box-shadow:0 12px 48px rgba(0,0,0,.45);">
+    <p id="custom-prompt-msg" style="font-size:.95rem;margin-bottom:10px;color:var(--text);"></p>
+    <input type="text" id="custom-prompt-input" style="margin-bottom:20px;">
+    <div style="display:flex;gap:10px;justify-content:flex-end;">
+      <button id="custom-prompt-no" class="btn-secondary" style="padding:8px 20px;">キャンセル</button>
+      <button id="custom-prompt-yes" class="btn-primary" style="padding:8px 20px;">OK</button>
+    </div>
+  </div>
+</div>
+
 <!-- 送信中：画面全体を覆って操作不可にするオーバーレイ -->
 <div id="submitting-overlay" class="hidden">
   <div id="submitting-box">
@@ -1440,6 +1464,7 @@ window.onload = () => {
     document.getElementById('no-badge').textContent='出品No. '+String(state.nextNo).padStart(2,'0');
   });
   updateBackupStatus();
+  renderTemplateSelect();
 };
 
 function buildWheelInchSelect(){
@@ -2600,6 +2625,104 @@ async function deleteItem(idx){
   deleteSharedItem(no);
   saveBackup();
 }
+// フォームデータ（captureFormData()の戻り値の形）をフォームへ反映する。
+// 編集画面への復元・テンプレート適用の両方から使う共通処理。
+// restoreDateAndPrice=falseのときは日付・価格を上書きしない（テンプレート適用時に使用）。
+function applyFormData(fd, { restoreDateAndPrice = true } = {}){
+  if(restoreDateAndPrice) document.getElementById('f-date').value=fd.date||'';
+  // qty
+  state.qty=fd.qty||null;
+  updateQtyBtns();
+  // tire
+  if(fd.tireKinds){ state.tireKinds=fd.tireKinds; renderTireKindBtns(); toggle('tire-kind-other-wrap',fd.tireKinds.includes('その他')); }
+  if(fd.makerVal) document.getElementById('f-maker').value=fd.makerVal;
+  if(fd.makerOther) document.getElementById('f-maker-other').value=fd.makerOther;
+  if(fd.makerVal==='その他') document.getElementById('maker-other-wrap').classList.remove('hidden');
+  if(fd.brand) document.getElementById('f-brand').value=fd.brand;
+  if(fd.sizeType){ state.sizeType=fd.sizeType; setSizeType(fd.sizeType); }
+  if(fd.sameSize!==undefined){ state.sameSize=fd.sameSize; setSameSize(fd.sameSize); }
+  // タイヤサイズの生データを復元（updateSizeInputsで生成された各input/selectに値を反映）
+  if(fd.sizeRaw){
+    const sr=fd.sizeRaw;
+    const setVal=(id,val)=>{ const el=document.getElementById(id); if(el && val) el.value=val; };
+    for(let i=0;i<2;i++){
+      if(sr.radial && sr.radial[i]){
+        setVal('size-w-'+i, sr.radial[i].w);
+        setVal('size-f-'+i, sr.radial[i].f);
+        setVal('size-st-'+i, sr.radial[i].st);
+        setVal('size-i-'+i, sr.radial[i].inch);
+      }
+      if(sr.offroad && sr.offroad[i]){
+        setVal('of-w-'+i, sr.offroad[i].w);
+        setVal('of-h-'+i, sr.offroad[i].h);
+        setVal('of-st-'+i, sr.offroad[i].st);
+        setVal('of-i-'+i, sr.offroad[i].inch);
+      }
+      if(sr.bias && sr.bias[i]){
+        setVal('bi-w-'+i, sr.bias[i].w);
+        setVal('bi-f-'+i, sr.bias[i].f);
+        setVal('bi-st-'+i, sr.bias[i].st);
+        setVal('bi-i-'+i, sr.bias[i].inch);
+      }
+      if(sr.free && sr.free[i]!==undefined){
+        setVal('size-free-'+i, sr.free[i]);
+      }
+    }
+  }
+  if(fd.loadIndex) document.getElementById('f-load-index').value=fd.loadIndex;
+  if(fd.grooveAll!==undefined){ state.grooveAll=fd.grooveAll; setGrooveMode(fd.grooveAll); }
+  if(fd.grooves){ state.grooves=fd.grooves; updateGrooveInputs(); }
+  if(fd.yearAll!==undefined){ state.yearAll=fd.yearAll; setYearMode(fd.yearAll); }
+  if(fd.years){ state.years=fd.years; updateYearInputs(); }
+  if(fd.tireNote) document.getElementById('f-tire-note').value=fd.tireNote;
+  // wheel
+  if(fd.isOem!==undefined) setOem(fd.isOem);
+  if(fd.wheelBrand) document.getElementById('f-wheel-brand').value=fd.wheelBrand;
+  if(fd.wInch) document.getElementById('f-w-inch').value=fd.wInch;
+  if(fd.rim) document.getElementById('f-rim').value=fd.rim;
+  if(fd.hub) document.getElementById('f-hub').value=fd.hub;
+  if(fd.pcd) setPcd(fd.pcd);
+  if(fd.pcdOther) document.getElementById('f-pcd-other').value=fd.pcdOther;
+  if(fd.offsetSign) setOffsetSign(fd.offsetSign);
+  if(fd.offset) document.getElementById('f-offset').value=fd.offset;
+  if(fd.wheelNote) document.getElementById('f-wheel-note').value=fd.wheelNote;
+  // cap
+  if(fd.capBrand) document.getElementById('f-cap-brand').value=fd.capBrand;
+  if(fd.capDiam) document.getElementById('f-cap-diam').value=fd.capDiam;
+  if(fd.capBack) document.getElementById('f-cap-back').value=fd.capBack;
+  if(fd.capH) document.getElementById('f-cap-h').value=fd.capH;
+  if(fd.capNote) document.getElementById('f-cap-note').value=fd.capNote;
+  // sel states
+  if(fd.sel){
+    Object.assign(state.sel, fd.sel);
+    // restore button visuals
+    Object.keys(fd.sel).forEach(key=>{
+      const grp=document.getElementById(key+'-btns');
+      if(grp){
+        grp.querySelectorAll('button').forEach(b=>{
+          b.classList.toggle('selected', b.textContent===fd.sel[key]||b.dataset.v===fd.sel[key]);
+        });
+      }
+    });
+    if(fd.sel['puncture']==='あり') document.getElementById('puncture-num-wrap').classList.remove('hidden');
+    if(fd.sel['holes']==='その他') document.getElementById('holes-other-wrap').classList.remove('hidden');
+    if(fd.holesOther) document.getElementById('f-holes-other').value=fd.holesOther;
+  }
+  // punctureNum
+  if(fd.punctureNum){ state.punctureNum=fd.punctureNum; updatePunctureNumBtns(); }
+  // shipping
+  if(fd.carrier) setCarrier(fd.carrier);
+  if(fd.size3) { state.size3=fd.size3; updateSize3Btns(); }
+  if(fd.kuchi) { state.kuchi=fd.kuchi; updateKuchiBtns(); }
+  // price
+  if(restoreDateAndPrice){
+    if(fd.isAuction!==undefined) setAuction(fd.isAuction);
+    if(fd.startPrice) document.getElementById('f-start-price').value=fd.startPrice;
+    if(fd.buynowPrice) document.getElementById('f-buynow-price').value=fd.buynowPrice;
+    if(fd.fixedPrice) document.getElementById('f-fixed-price').value=fd.fixedPrice;
+  }
+}
+
 async function editItem(idx){
   const item=state.items[idx];
   if(item.zipped){ showToast('ZIP作成済みの商品は編集できません。'); return; }
@@ -2607,112 +2730,19 @@ async function editItem(idx){
   state.editingIdx=idx;
   // フォームにデータを復元
   setType(item.type, true);
-  if(item.formData){
-    const fd=item.formData;
-    document.getElementById('f-date').value=fd.date||'';
-    // qty
-    state.qty=fd.qty||null;
-    updateQtyBtns();
-    // tire
-    if(fd.tireKinds){ state.tireKinds=fd.tireKinds; renderTireKindBtns(); toggle('tire-kind-other-wrap',fd.tireKinds.includes('その他')); }
-    if(fd.makerVal) document.getElementById('f-maker').value=fd.makerVal;
-    if(fd.makerOther) document.getElementById('f-maker-other').value=fd.makerOther;
-    if(fd.makerVal==='その他') document.getElementById('maker-other-wrap').classList.remove('hidden');
-    if(fd.brand) document.getElementById('f-brand').value=fd.brand;
-    if(fd.sizeType){ state.sizeType=fd.sizeType; setSizeType(fd.sizeType); }
-    if(fd.sameSize!==undefined){ state.sameSize=fd.sameSize; setSameSize(fd.sameSize); }
-    // タイヤサイズの生データを復元（updateSizeInputsで生成された各input/selectに値を反映）
-    if(fd.sizeRaw){
-      const sr=fd.sizeRaw;
-      const setVal=(id,val)=>{ const el=document.getElementById(id); if(el && val) el.value=val; };
-      for(let i=0;i<2;i++){
-        if(sr.radial && sr.radial[i]){
-          setVal('size-w-'+i, sr.radial[i].w);
-          setVal('size-f-'+i, sr.radial[i].f);
-          setVal('size-st-'+i, sr.radial[i].st);
-          setVal('size-i-'+i, sr.radial[i].inch);
-        }
-        if(sr.offroad && sr.offroad[i]){
-          setVal('of-w-'+i, sr.offroad[i].w);
-          setVal('of-h-'+i, sr.offroad[i].h);
-          setVal('of-st-'+i, sr.offroad[i].st);
-          setVal('of-i-'+i, sr.offroad[i].inch);
-        }
-        if(sr.bias && sr.bias[i]){
-          setVal('bi-w-'+i, sr.bias[i].w);
-          setVal('bi-f-'+i, sr.bias[i].f);
-          setVal('bi-st-'+i, sr.bias[i].st);
-          setVal('bi-i-'+i, sr.bias[i].inch);
-        }
-        if(sr.free && sr.free[i]!==undefined){
-          setVal('size-free-'+i, sr.free[i]);
-        }
-      }
-    }
-    if(fd.loadIndex) document.getElementById('f-load-index').value=fd.loadIndex;
-    if(fd.grooveAll!==undefined){ state.grooveAll=fd.grooveAll; setGrooveMode(fd.grooveAll); }
-    if(fd.grooves){ state.grooves=fd.grooves; updateGrooveInputs(); }
-    if(fd.yearAll!==undefined){ state.yearAll=fd.yearAll; setYearMode(fd.yearAll); }
-    if(fd.years){ state.years=fd.years; updateYearInputs(); }
-    if(fd.tireNote) document.getElementById('f-tire-note').value=fd.tireNote;
-    // wheel
-    if(fd.isOem!==undefined) setOem(fd.isOem);
-    if(fd.wheelBrand) document.getElementById('f-wheel-brand').value=fd.wheelBrand;
-    if(fd.wInch) document.getElementById('f-w-inch').value=fd.wInch;
-    if(fd.rim) document.getElementById('f-rim').value=fd.rim;
-    if(fd.hub) document.getElementById('f-hub').value=fd.hub;
-    if(fd.pcd) setPcd(fd.pcd);
-    if(fd.pcdOther) document.getElementById('f-pcd-other').value=fd.pcdOther;
-    if(fd.offsetSign) setOffsetSign(fd.offsetSign);
-    if(fd.offset) document.getElementById('f-offset').value=fd.offset;
-    if(fd.wheelNote) document.getElementById('f-wheel-note').value=fd.wheelNote;
-    // cap
-    if(fd.capBrand) document.getElementById('f-cap-brand').value=fd.capBrand;
-    if(fd.capDiam) document.getElementById('f-cap-diam').value=fd.capDiam;
-    if(fd.capBack) document.getElementById('f-cap-back').value=fd.capBack;
-    if(fd.capH) document.getElementById('f-cap-h').value=fd.capH;
-    if(fd.capNote) document.getElementById('f-cap-note').value=fd.capNote;
-    // restore image data if available
-    state.mainImages = (item.imagesMainData || []).map((src,i)=>({
-      src,
-      name: (item.imagesMain || [])[i] || ''
-    }));
-    state.additionalImages = (item.imagesAdditionalData || []).map((src,i)=>({
-      src,
-      name: (item.imagesAdditional || [])[i] || ''
-    }));
-    renderImagePreview('main');
-    renderImagePreview('additional');
-    // sel states
-    if(fd.sel){
-      Object.assign(state.sel, fd.sel);
-      // restore button visuals
-      Object.keys(fd.sel).forEach(key=>{
-        const grp=document.getElementById(key+'-btns');
-        if(grp){
-          grp.querySelectorAll('button').forEach(b=>{
-            b.classList.toggle('selected', b.textContent===fd.sel[key]||b.dataset.v===fd.sel[key]);
-          });
-        }
-      });
-      if(fd.sel['puncture']==='あり') document.getElementById('puncture-num-wrap').classList.remove('hidden');
-      if(fd.sel['holes']==='その他') document.getElementById('holes-other-wrap').classList.remove('hidden');
-      if(fd.holesOther) document.getElementById('f-holes-other').value=fd.holesOther;
-    }
-    // punctureNum
-    if(fd.punctureNum){ state.punctureNum=fd.punctureNum; updatePunctureNumBtns(); }
-    // shipping
-    if(fd.carrier) setCarrier(fd.carrier);
-    if(fd.size3) { state.size3=fd.size3; updateSize3Btns(); }
-    if(fd.kuchi) { state.kuchi=fd.kuchi; updateKuchiBtns(); }
-    // price
-    if(fd.isAuction!==undefined) setAuction(fd.isAuction);
-    if(fd.startPrice) document.getElementById('f-start-price').value=fd.startPrice;
-    if(fd.buynowPrice) document.getElementById('f-buynow-price').value=fd.buynowPrice;
-    if(fd.fixedPrice) document.getElementById('f-fixed-price').value=fd.fixedPrice;
-    // title
-    document.getElementById('f-title').value=item.title;
-  }
+  if(item.formData) applyFormData(item.formData);
+  // restore image data if available
+  state.mainImages = (item.imagesMainData || []).map((src,i)=>({
+    src,
+    name: (item.imagesMain || [])[i] || ''
+  }));
+  state.additionalImages = (item.imagesAdditionalData || []).map((src,i)=>({
+    src,
+    name: (item.imagesAdditional || [])[i] || ''
+  }));
+  renderImagePreview('main');
+  renderImagePreview('additional');
+  document.getElementById('f-title').value=item.title;
   // ボタンを「更新」に変更
   const addBtn=document.getElementById('add-update-btn');
   addBtn.textContent='商品リストを更新';
@@ -2720,6 +2750,66 @@ async function editItem(idx){
   // 編集画面を新規出品フォームと分離したモーダルとして表示
   enterEditModal(item.no);
   updatePreview();
+}
+
+// ===== テンプレート（よく使う組み合わせの保存・呼び出し） =====
+// 出品No・日付・価格・画像・タイトルは含まない（captureFormData()準拠の仕様データのみ）
+const TEMPLATES_KEY='yauction_templates';
+
+function getTemplates(){
+  try{ return JSON.parse(localStorage.getItem(TEMPLATES_KEY))||[]; }catch(e){ return []; }
+}
+function saveTemplatesList(templates){
+  localStorage.setItem(TEMPLATES_KEY, JSON.stringify(templates));
+}
+
+function renderTemplateSelect(){
+  const sel=document.getElementById('f-template');
+  const prevValue=sel.value;
+  const templates=getTemplates();
+  sel.innerHTML='<option value="">テンプレートを選択...</option>'
+    + templates.map((t,i)=>`<option value="${i}">${t.name}</option>`).join('');
+  if(prevValue && templates[prevValue]) sel.value=prevValue;
+}
+
+async function saveCurrentAsTemplate(){
+  const defaultName=buildTitle()||'テンプレート';
+  const name=await customPrompt('テンプレート名を入力してください。', defaultName);
+  if(!name) return;
+  const templates=getTemplates();
+  templates.unshift({ name, type:state.type, savedAt:new Date().toISOString(), formData:captureFormData() });
+  saveTemplatesList(templates);
+  renderTemplateSelect();
+  document.getElementById('f-template').value='0';
+  showToast('テンプレートを保存しました。');
+}
+
+function applyTemplate(){
+  const sel=document.getElementById('f-template');
+  const idx=sel.value;
+  if(idx===''){ showToast('テンプレートを選択してください。'); return; }
+  const templates=getTemplates();
+  const tpl=templates[idx];
+  if(!tpl) return;
+  setType(tpl.type, true);
+  applyFormData(tpl.formData, { restoreDateAndPrice:false });
+  updatePreview();
+  saveStorage();
+  showToast(`テンプレート「${tpl.name}」を適用しました。`);
+}
+
+async function deleteSelectedTemplate(){
+  const sel=document.getElementById('f-template');
+  const idx=sel.value;
+  if(idx===''){ showToast('テンプレートを選択してください。'); return; }
+  const templates=getTemplates();
+  const tpl=templates[idx];
+  if(!tpl) return;
+  if(!await customConfirm(`テンプレート「${tpl.name}」を削除します。よろしいですか？`)) return;
+  templates.splice(idx,1);
+  saveTemplatesList(templates);
+  renderTemplateSelect();
+  showToast('テンプレートを削除しました。');
 }
 
 // ===== PREVIEW ITEM (read-only) =====
@@ -3509,6 +3599,28 @@ function customConfirm(message){
     };
     yes.onclick=()=>done(true);
     no.onclick=()=>done(false);
+  });
+}
+
+// ===== カスタム入力ダイアログ（ブラウザのprompt代替。テンプレート名などに使用） =====
+function customPrompt(message, defaultValue){
+  return new Promise(resolve=>{
+    document.getElementById('custom-prompt-msg').textContent=message;
+    const input=document.getElementById('custom-prompt-input');
+    input.value=defaultValue||'';
+    const overlay=document.getElementById('custom-prompt-overlay');
+    overlay.classList.remove('hidden');
+    input.focus();
+    const yes=document.getElementById('custom-prompt-yes');
+    const no=document.getElementById('custom-prompt-no');
+    const done=result=>{
+      overlay.classList.add('hidden');
+      yes.onclick=null; no.onclick=null; input.onkeydown=null;
+      resolve(result);
+    };
+    yes.onclick=()=>done(input.value.trim()||null);
+    no.onclick=()=>done(null);
+    input.onkeydown=(e)=>{ if(e.key==='Enter'){ e.preventDefault(); done(input.value.trim()||null); } };
   });
 }
 
