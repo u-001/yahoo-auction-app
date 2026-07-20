@@ -73,7 +73,7 @@
     white-space: nowrap;
   }
   /* Section */
-  section.card {
+  section.card, details.card {
     background: var(--bg2);
     border: 1px solid var(--border);
     border-radius: var(--radius);
@@ -85,6 +85,19 @@
     text-transform: uppercase; letter-spacing: .08em;
     margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 8px;
   }
+  /* バックアップ：普段は折りたたんでおく */
+  details.backup-details summary {
+    font-size: .9rem; font-weight: 700; color: var(--text2);
+    text-transform: uppercase; letter-spacing: .08em;
+    cursor: pointer; list-style: none;
+  }
+  details.backup-details summary::-webkit-details-marker { display: none; }
+  details.backup-details summary::before { content: '▸ '; }
+  details.backup-details[open] summary::before { content: '▾ '; }
+  details.backup-details[open] summary {
+    margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px solid var(--border);
+  }
+  details.backup-details .sec-sub:first-of-type { margin-top: 10px; }
   /* Form elements */
   .field { margin-bottom: 14px; }
   .field label { display: block; font-size: .85rem; color: var(--text2); margin-bottom: 5px; font-weight: 600; }
@@ -238,11 +251,17 @@
     max-height: 80vh; overflow-y: auto;
   }
   .backup-version-row {
-    display: flex; align-items: center; justify-content: space-between; gap: 10px;
     background: var(--bg3); border-radius: var(--radius-sm);
     padding: 10px 12px; margin-bottom: 8px; font-size: .85rem;
   }
+  .backup-version-row summary {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    cursor: pointer; list-style: none;
+  }
+  .backup-version-row summary::-webkit-details-marker { display: none; }
   .backup-version-row .backup-version-meta { color: var(--text2); }
+  .backup-version-row .backup-version-arrow::before { content: '▸ '; }
+  .backup-version-row[open] .backup-version-arrow::before { content: '▾ '; }
   .backup-version-row button {
     background: var(--bg2); border: 1px solid var(--border);
     border-radius: var(--radius-sm); color: var(--text);
@@ -250,6 +269,14 @@
     white-space: nowrap; transition: all .12s;
   }
   .backup-version-row button:hover { border-color: var(--accent); color: var(--accent); }
+  .backup-version-items {
+    margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border);
+    display: flex; flex-direction: column; gap: 4px; max-height: 200px; overflow-y: auto;
+  }
+  .backup-version-item {
+    font-size: .78rem; color: var(--text2); background: var(--bg2);
+    border-radius: 4px; padding: 4px 8px;
+  }
 
   /* Preview overlay (read-only item preview) */
   #preview-overlay {
@@ -320,7 +347,7 @@
     .row3 { grid-template-columns: 1fr 1fr; }
     .row2 { grid-template-columns: 1fr; }
     header h1 { font-size: .88rem; }
-    section.card { padding: 14px 12px; }
+    section.card, details.card { padding: 14px 12px; }
     .item-row { flex-wrap: wrap; }
   }
   /* Subsection */
@@ -1065,14 +1092,15 @@
     </div>
   </section>
 
-  <!-- バックアップ -->
-  <section class="card">
-    <h2>バックアップ</h2>
+  <!-- バックアップ（普段は使わないため折りたたみ表示） -->
+  <details class="card backup-details">
+    <summary>バックアップ</summary>
+    <div class="sec-sub">※ 画像は保存されません（商品情報のみバックアップされます）</div>
     <div class="sec-sub" id="backup-status">最終バックアップ: 確認中...</div>
     <div class="action-bar">
       <button class="btn-secondary" onclick="openBackupHistoryModal()">バックアップから復元</button>
     </div>
-  </section>
+  </details>
 </div><!-- /app -->
 
 <!-- バックアップ履歴 -->
@@ -1493,13 +1521,33 @@ async function openBackupHistoryModal(){
   listEl.innerHTML = '';
   versions.forEach(ver=>{
     const savedAtStr = ver.savedAt ? new Date(ver.savedAt).toLocaleString('ja-JP') : '日時不明';
-    const row = document.createElement('div');
+    const row = document.createElement('details');
     row.className = 'backup-version-row';
-    row.innerHTML = `<span class="backup-version-meta">${savedAtStr}　${ver.count}件</span>`;
+    const summary = document.createElement('summary');
+    summary.innerHTML = `<span class="backup-version-meta"><span class="backup-version-arrow"></span>${savedAtStr}　${ver.count}件</span>`;
     const btn = document.createElement('button');
     btn.textContent = 'この版を復元';
-    btn.onclick = () => restoreBackupVersion(ver.slot, savedAtStr, ver.count);
-    row.appendChild(btn);
+    btn.onclick = (e) => { e.preventDefault(); e.stopPropagation(); restoreBackupVersion(ver.slot, savedAtStr, ver.count); };
+    summary.appendChild(btn);
+    row.appendChild(summary);
+    const body = document.createElement('div');
+    body.className = 'backup-version-items';
+    body.innerHTML = '<span style="color:var(--text2);font-size:.78rem;">読み込み中...</span>';
+    row.appendChild(body);
+    // 開いたときだけ、その版の商品一覧（出品No・タイトル）を取得する
+    row.addEventListener('toggle', async () => {
+      if(!row.open || body.dataset.loaded) return;
+      body.dataset.loaded = '1';
+      try{
+        const data = await apiFetch('/api/backup/version?slot=' + ver.slot);
+        const items = (data.items || []).slice().sort((a,b)=>(a.no||0)-(b.no||0));
+        body.innerHTML = items.length
+          ? items.map(it=>`<div class="backup-version-item">No.${String(it.no).padStart(2,'0')} ${it.title||'（タイトル未設定）'}</div>`).join('')
+          : '<span style="color:var(--text2);font-size:.78rem;">商品がありません。</span>';
+      } catch(e){
+        body.innerHTML = '<span style="color:var(--text2);font-size:.78rem;">商品一覧の取得に失敗しました。</span>';
+      }
+    });
     listEl.appendChild(row);
   });
 }
