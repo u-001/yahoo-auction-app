@@ -392,15 +392,14 @@
     border-radius: var(--radius-sm);
     overflow: hidden;
     background: var(--bg);
-    aspect-ratio: 1;
   }
   .image-preview-item img {
     width: 100%;
-    height: 100%;
-    object-fit: cover;
+    height: auto;
+    display: block;
     -webkit-user-drag: none;
     user-select: none;
-    pointer-events: none;
+    cursor: zoom-in;
   }
   .image-preview-remove {
     position: absolute;
@@ -464,6 +463,25 @@
     border: 2px solid var(--accent);
     background: var(--selected-bg);
   }
+  /* 画像タップ時：単体拡大表示 */
+  #image-lightbox-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.85);
+    display: flex; align-items: center; justify-content: center; z-index: 800;
+    padding: 24px; cursor: zoom-out;
+  }
+  #image-lightbox-overlay.hidden { display: none; }
+  #image-lightbox-overlay img {
+    max-width: 100%; max-height: 100%;
+    -webkit-user-drag: none; user-select: none;
+    box-shadow: 0 12px 48px rgba(0,0,0,.6);
+  }
+  #image-lightbox-close {
+    position: fixed; top: 16px; right: 20px;
+    background: rgba(255,255,255,.15); color: #fff; border: none;
+    border-radius: 50%; width: 36px; height: 36px; font-size: 20px;
+    cursor: pointer; z-index: 801;
+  }
+  #image-lightbox-close:hover { background: rgba(255,255,255,.3); }
   @keyframes export-spin { to { transform: rotate(360deg); } }
   /* 送信中はフォーム全体を操作不可・薄暗くする */
   #form-section.form-disabled {
@@ -1200,6 +1218,12 @@
   </div>
 </div>
 
+<!-- 画像タップ時：単体拡大表示 -->
+<div id="image-lightbox-overlay" class="hidden" onclick="closeImageLightbox()">
+  <button type="button" id="image-lightbox-close" onclick="closeImageLightbox()" title="閉じる">&times;</button>
+  <img id="image-lightbox-img" src="" alt="">
+</div>
+
 <!-- 送信中：画面全体を覆って操作不可にするオーバーレイ -->
 <div id="submitting-overlay" class="hidden">
   <div id="submitting-box">
@@ -1384,7 +1408,12 @@ function renderImagePreview(type = 'main') {
         ${idx < imageArray.length - 1 ? `<button type="button" class="image-preview-btn" onclick="moveImageDown(${idx}, '${type}')" title="下へ">↓</button>` : '<div style="flex:1"></div>'}
       </div>
     `;
-    
+
+    // タップ/クリックで単体拡大表示（ドラッグ操作とは独立してimg要素に付与）
+    itemDiv.querySelector('img').addEventListener('click', () => {
+      openImageLightbox(img.src, img.name || '');
+    });
+
     // ドラッグ&ドロップイベント（メイン画像⇔追加画像の間でも移動可能）
     itemDiv.addEventListener('dragstart', (e) => {
       dragState = { type, idx };
@@ -2832,7 +2861,9 @@ function previewItem(idx){
   const imgsEl = document.getElementById('preview-images'); imgsEl.innerHTML='';
   let imageCount = 0;
   const addImageEl = (src, name)=>{
-    const img = document.createElement('img'); img.src = src; img.alt = name||''; imgsEl.appendChild(img); imageCount++;
+    const img = document.createElement('img'); img.src = src; img.alt = name||''; img.style.cursor='zoom-in';
+    img.addEventListener('click', ()=>openImageLightbox(src, name));
+    imgsEl.appendChild(img); imageCount++;
   };
   const mains = item.imagesMainData || [];
   const mainsNames = item.imagesMain || [];
@@ -2853,6 +2884,18 @@ function previewItem(idx){
   document.getElementById('preview-overlay').classList.remove('hidden');
 }
 function closePreview(){ document.getElementById('preview-overlay').classList.add('hidden'); previewIdx=null; }
+
+// ===== 画像タップ時：単体拡大表示 =====
+function openImageLightbox(src, alt){
+  if(!src) return;
+  const img=document.getElementById('image-lightbox-img');
+  img.src=src; img.alt=alt||'';
+  document.getElementById('image-lightbox-overlay').classList.remove('hidden');
+}
+function closeImageLightbox(){
+  document.getElementById('image-lightbox-overlay').classList.add('hidden');
+  document.getElementById('image-lightbox-img').src='';
+}
 function editFromPreview(){
   if(previewIdx===null) return;
   const idx=previewIdx;
@@ -3643,7 +3686,8 @@ document.getElementById('backup-overlay').addEventListener('click',(e)=>{
 });
 document.addEventListener('keydown',(e)=>{
   if(e.key!=='Escape') return;
-  if(!document.getElementById('edit-overlay').classList.contains('hidden')) cancelEditItem();
+  if(!document.getElementById('image-lightbox-overlay').classList.contains('hidden')) closeImageLightbox();
+  else if(!document.getElementById('edit-overlay').classList.contains('hidden')) cancelEditItem();
   else if(!document.getElementById('preview-overlay').classList.contains('hidden')) closePreview();
   else if(!document.getElementById('overlay').classList.contains('hidden')) closeOverlay();
   else if(!document.getElementById('backup-overlay').classList.contains('hidden')) closeBackupOverlay();
