@@ -1191,7 +1191,7 @@
       </div>
     </div>
     <div id="preview-meta" style="display:flex;flex-wrap:wrap;gap:14px;font-size:.85rem;color:var(--text2);margin:6px 0 16px;"></div>
-    <div class="preview-images" id="preview-images"></div>
+    <div id="preview-images"></div>
     <div id="preview-desc" style="white-space:pre-wrap;color:var(--text2);font-size:.9rem;"></div>
   </div>
 </div>
@@ -2943,22 +2943,31 @@ function previewItem(idx){
     ? `開始${formatYen(item.startPrice)||'-'}円${item.buynowPrice?` / 即決${formatYen(item.buynowPrice)}円`:''}`
     : `${formatYen(item.fixedPrice)||'-'}円`;
   metaEl.innerHTML = `<span>商品状態：${item.condition||'-'}</span><span>出品形式：${formatLabel}</span><span style="color:var(--success);font-weight:700;">${priceText}</span>`;
-  // images (main first, then additional)
+  // images: メイン画像・追加画像を見出しで分けて表示する（入力フォームの表記と統一）
   const imgsEl = document.getElementById('preview-images'); imgsEl.innerHTML='';
   let imageCount = 0;
-  const addImageEl = (src, name)=>{
-    const img = document.createElement('img'); img.src = src; img.alt = name||''; img.style.cursor='zoom-in';
-    img.addEventListener('click', ()=>openImageLightbox(src, name));
-    imgsEl.appendChild(img); imageCount++;
+  const addImageGroup = (label, dataArr, namesArr, namePrefix, nameOffset)=>{
+    const items = (dataArr||[]).map((d,i)=>d ? { src:d, name: (namesArr||[])[i] || (namePrefix+(i+nameOffset)) } : null).filter(Boolean);
+    if(!items.length) return;
+    const labelEl = document.createElement('div');
+    labelEl.className = 'sec-sub';
+    labelEl.style.margin = imageCount ? '14px 0 6px' : '0 0 6px';
+    labelEl.textContent = label;
+    imgsEl.appendChild(labelEl);
+    const grid = document.createElement('div');
+    grid.className = 'preview-images';
+    grid.style.marginBottom = '0';
+    items.forEach(({src,name})=>{
+      const img = document.createElement('img'); img.src = src; img.alt = name; img.style.cursor='zoom-in';
+      img.addEventListener('click', ()=>openImageLightbox(src, name));
+      grid.appendChild(img); imageCount++;
+    });
+    imgsEl.appendChild(grid);
   };
-  const mains = item.imagesMainData || [];
-  const mainsNames = item.imagesMain || [];
-  mains.forEach((d,i)=>{ if(d) addImageEl(d, mainsNames[i]||('image'+(i+1))); });
-  const adds = item.imagesAdditionalData || [];
-  const addsNames = item.imagesAdditional || [];
-  adds.forEach((d,i)=>{ if(d) addImageEl(d, addsNames[i]||('add'+(i+11))); });
+  addImageGroup('メイン画像', item.imagesMainData, item.imagesMain, 'image', 1);
+  addImageGroup('追加画像（11枚目〜）', item.imagesAdditionalData, item.imagesAdditional, 'add', 11);
   if(imageCount === 0){
-    imgsEl.innerHTML = '<div style="grid-column:1/-1;color:var(--text2);font-size:.95rem;padding:18px;border:1px dashed var(--border);border-radius:8px;text-align:center;">画像がまだアップロードされていません。</div>';
+    imgsEl.innerHTML = '<div style="color:var(--text2);font-size:.95rem;padding:18px;border:1px dashed var(--border);border-radius:8px;text-align:center;">画像がまだアップロードされていません。</div>';
   }
   // description (desc is HTML already)
   const descEl = document.getElementById('preview-desc');
