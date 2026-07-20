@@ -2165,7 +2165,7 @@ const DROPBOX_EXTRA_PLACEHOLDER='__DROPBOX_EXTRA_URL__';
 function buildDescription(no){
   const t=state.type; if(!t) return '';
   const qty=state.qty||0;
-  const header=`<b>※ 自己紹介欄を読んでください。</b><br><BR><BR>\n<br><br>\n\n`;
+  const header=`<b>※ 自己紹介欄を読んでください。</b><BR><BR><BR>\n`;
   const footer=`※ 商品発送後、2週間で取引完了とさせていただいております。<BR>\n※ 商品説明に記載されていない損傷など、また商品未着などございましたら、お手数ですが、商品発送後2週間以内にご連絡ください。<BR>\n※ その他ご不明点などございましたらお気軽にお問い合わせください。<BR><BR><BR>\n<HR><BR>\n管理番号：${getMgmtNo(no)}`;
   // 11枚目以降の追加画像がある場合のみ、Dropbox共有リンク欄を仕込む（URLはexportZip時に確定）
   const hasExtraImages=(state.additionalImages||[]).length>0;
