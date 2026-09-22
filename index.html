@@ -897,7 +897,7 @@
       <div class="row3">
         <div class="field">
           <label>インチ<span class="req">*</span></label>
-          <select id="f-w-inch" onchange="updatePreview()">
+          <select id="f-w-inch" onchange="onWheelInchChange()">
             <option value="">-</option>
           </select>
           <div class="err-msg" id="w-inch-err">インチを選択してください</div>
@@ -918,6 +918,11 @@
             <span style="color:var(--text2);font-size:.82rem;">mm</span>
           </div>
         </div>
+      </div>
+      <div class="field hidden" id="w-inch-other-wrap">
+        <label>インチ（その他）<span class="req">*</span></label>
+        <input type="text" id="f-w-inch-other" placeholder="例：10" oninput="updatePreview()">
+        <div class="err-msg" id="w-inch-other-err">インチを入力してください</div>
       </div>
       <div class="field">
         <label>穴数<span class="req">*</span></label>
@@ -1178,7 +1183,7 @@
       </div>
       <div class="field">
         <label>商品説明（手動修正可）</label>
-        <div class="preview-note">HTMLタグ（&lt;BR&gt;など）を含んだ状態で編集できます。手動で修正した内容はそのままZIP出力に使われます。</div>
+        <div class="preview-note">改行して読みやすく編集できます（HTMLタグは表示されません）。手動で修正した内容はZIP出力時に正しいHTML形式に変換されます。</div>
         <textarea id="f-desc" oninput="onDescInput()"></textarea>
       </div>
     </div>
@@ -1636,8 +1641,18 @@ function initStickyActionBar(){
 
 function buildWheelInchSelect(){
   const sel = document.getElementById('f-w-inch');
-  const vals = ['12','13','14','15','16','17','17.5','18','19','19.5','20','21','22','23以上'];
+  const vals = ['12','13','14','15','16','17','17.5','18','19','19.5','20','21','22','23'];
   vals.forEach(v=>{ const o=document.createElement('option'); o.value=v; o.textContent=v+'インチ'; sel.appendChild(o); });
+  const other=document.createElement('option'); other.value='その他'; other.textContent='その他（自由入力）'; sel.appendChild(other);
+}
+function onWheelInchChange(){
+  document.getElementById('w-inch-other-wrap').classList.toggle('hidden', v('f-w-inch')!=='その他');
+  updatePreview();
+  saveStorage();
+}
+function getWheelInchVal(){
+  const val=v('f-w-inch');
+  return val==='その他' ? v('f-w-inch-other') : val;
 }
 
 // ===== STORAGE =====
@@ -2277,7 +2292,7 @@ function buildTitle(){
   }
   if(state.type==='wheel'){
     const brand=v('f-wheel-brand');
-    const inch=v('f-w-inch'); const rim=v('f-rim')+'J';
+    const inch=getWheelInchVal(); const rim=v('f-rim')+'J';
     const pcd=state.pcd==='その他'? v('f-pcd-other') : state.pcd;
     const offset=(state.offsetSign==='+'?'＋':'－')+v('f-offset');
     let title=[brand, inch&&rim? inch+'×'+rim:'', pcd?'PCD'+pcd:'', offset, qtyStr].filter(Boolean).join(' ');
@@ -2289,7 +2304,7 @@ function buildTitle(){
     const loadIdx=v('f-load-index');
     const maker=getMakerShort(); const brand=v('f-brand');
     const year=getYearDisplay(true);
-    const inch=v('f-w-inch'); const rim=v('f-rim')+'J';
+    const inch=getWheelInchVal(); const rim=v('f-rim')+'J';
     const pcd=state.pcd==='その他'? v('f-pcd-other') : state.pcd;
     const offset=(state.offsetSign==='+'?'＋':'－')+v('f-offset');
     let parts=[size, loadIdx, maker, brand, year, inch&&rim? inch+'×'+rim:'', pcd?'PCD'+pcd:'', offset, qty+'本SET'].filter(Boolean);
@@ -2417,7 +2432,7 @@ function buildDescription(no){
   }
   if(t==='wheel'){
     const kind=getWheelKindLabel();
-    const inch=v('f-w-inch'); const rim=v('f-rim'); const hub=v('f-hub');
+    const inch=getWheelInchVal(); const rim=v('f-rim'); const hub=v('f-hub');
     const holes=state.sel['holes']==='その他'? v('f-holes-other') : (state.sel['holes']||'');
     const pcdVal=state.pcd==='その他'? v('f-pcd-other') : (state.pcd||'');
     const offset=(state.offsetSign==='+'?'+':'-')+v('f-offset');
@@ -2441,7 +2456,7 @@ function buildDescription(no){
     const wheelDmg=getWheelDamage();
     const cond=getStatusWord(); const newOld=isNew()?'新品':'中古';
     const kind=getWheelKindLabel();
-    const inch=v('f-w-inch'); const rim=v('f-rim'); const hub=v('f-hub');
+    const inch=getWheelInchVal(); const rim=v('f-rim'); const hub=v('f-hub');
     const holes=state.sel['holes']==='その他'? v('f-holes-other') : (state.sel['holes']||'');
     const pcdVal=state.pcd==='その他'? v('f-pcd-other') : (state.pcd||'');
     const offset=(state.offsetSign==='+'?'+':'-')+v('f-offset');
@@ -2483,10 +2498,28 @@ function updatePreview(){
   if(state.descManual) return;
   const editingItem = (state.editingIdx!=null) ? state.items[state.editingIdx] : null;
   const no = editingItem ? editingItem.no : state.nextNo;
-  document.getElementById('f-desc').value = buildDescription(no);
+  document.getElementById('f-desc').value = descHtmlToPlain(buildDescription(no));
 }
 // 商品説明を手動で編集したら、以後は自動生成で上書きしない（編集し直しても手動修正分を維持するため）
 function onDescInput(){ state.descManual=true; saveStorage(); }
+// 説明欄の編集画面では<BR>等のHTMLタグを見せず、読みやすいプレーンテキストとして表示する
+const DESC_LINK_MARKER='［追加画像リンクはZIP出力時に自動挿入されます］';
+function descHtmlToPlain(html){
+  if(!html) return '';
+  const anchor=`<A HREF="${DROPBOX_EXTRA_PLACEHOLDER}">追加画像</A>`;
+  return html.split(anchor).join(DESC_LINK_MARKER)
+    .replace(/<\/?b>/gi,'')
+    .replace(/<hr\s*\/?>/gi,'')
+    .replace(/<br\s*\/?>/gi,'\n');
+}
+// 保存時にプレーンテキストを元のHTML形式へ変換する（descHtmlToPlainの逆変換）
+function descPlainToHtml(plain){
+  if(!plain) return '';
+  const anchor=`<A HREF="${DROPBOX_EXTRA_PLACEHOLDER}">追加画像</A>`;
+  return plain.replace(/\n/g,'<BR>')
+    .split(DESC_LINK_MARKER).join(anchor)
+    .replace(/^※ 自己紹介欄を読んでください。/,'<b>※ 自己紹介欄を読んでください。</b>');
+}
 
 // ===== VALIDATION =====
 function clearErrors(){ document.querySelectorAll('.has-error').forEach(el=>el.classList.remove('has-error')); }
@@ -2528,6 +2561,7 @@ function validate(){
     if(!state.sel['wheel-kind']){ showErr('wheel-kind-err'); ok=false; }
     if(!v('f-wheel-brand')){ showErr('wheel-brand-err'); ok=false; }
     if(!v('f-w-inch')){ showErr('w-inch-err'); ok=false; }
+    else if(v('f-w-inch')==='その他'&&!v('f-w-inch-other')){ showErr('w-inch-other-err'); ok=false; }
     if(!v('f-rim')){ showErr('rim-err'); ok=false; }
     if(!state.sel['holes']||(state.sel['holes']==='その他'&&!v('f-holes-other'))){ showErr('holes-err'); ok=false; }
     if(!state.pcd||(state.pcd==='その他'&&!v('f-pcd-other'))){ showErr('pcd-err'); ok=false; }
@@ -2605,7 +2639,7 @@ async function addItem(){
   if (no >= state.nextNo) state.nextNo = no + 1;
   state.usedNos.push(no);
   const title=document.getElementById('f-title').value;
-  const desc=state.descManual ? document.getElementById('f-desc').value : buildDescription(no);
+  const desc=state.descManual ? descPlainToHtml(document.getElementById('f-desc').value) : buildDescription(no);
   const price=state.isAuction ? (v('f-start-price')||0) : (v('f-fixed-price')||0);
   const priceLabel=state.isAuction ? `${formatYen(v('f-start-price'))||'-'}円〜` : `${formatYen(v('f-fixed-price'))||'-'}円`;
   const typeLabel={'tire':'タイヤのみ','wheel':'ホイールのみ','set':'セット','cap':'キャップ'}[state.type];
@@ -2674,7 +2708,7 @@ async function updateItem(){
   item.title=document.getElementById('f-title').value;
   item.titleManual=state.titleManual;
   item.descManual=state.descManual;
-  item.desc=state.descManual ? document.getElementById('f-desc').value : buildDescription(item.no);
+  item.desc=state.descManual ? descPlainToHtml(document.getElementById('f-desc').value) : buildDescription(item.no);
   item.formData=captureFormData();
   item.date=v('f-date');
   item.startPrice=v('f-start-price'); item.buynowPrice=v('f-buynow-price');
@@ -2740,7 +2774,7 @@ function captureFormData(){
     grooves:[...state.grooves], grooveOthers:[...state.grooveOthers], yearAll:state.yearAll, years:[...state.years],
     tireNote:v('f-tire-note'),
     wheelBrand:v('f-wheel-brand'),
-    wInch:v('f-w-inch'), rim:v('f-rim'), hub:v('f-hub'),
+    wInch:v('f-w-inch'), wInchOther:v('f-w-inch-other'), rim:v('f-rim'), hub:v('f-hub'),
     pcd:state.pcd, pcdOther:v('f-pcd-other'),
     offsetSign:state.offsetSign, offset:v('f-offset'),
     holesOther:v('f-holes-other'), wheelNote:v('f-wheel-note'),
@@ -2886,6 +2920,8 @@ function applyFormData(fd, { restoreDateAndPrice = true } = {}){
   // wheel
   if(fd.wheelBrand) document.getElementById('f-wheel-brand').value=fd.wheelBrand;
   if(fd.wInch) document.getElementById('f-w-inch').value=fd.wInch;
+  if(fd.wInch==='その他') document.getElementById('w-inch-other-wrap').classList.remove('hidden');
+  if(fd.wInchOther) document.getElementById('f-w-inch-other').value=fd.wInchOther;
   if(fd.rim) document.getElementById('f-rim').value=fd.rim;
   if(fd.hub) document.getElementById('f-hub').value=fd.hub;
   if(fd.pcd) setPcd(fd.pcd);
@@ -2951,7 +2987,7 @@ async function editItem(idx){
   renderImagePreview('additional');
   document.getElementById('f-title').value=item.title;
   state.titleManual=!!item.titleManual;
-  document.getElementById('f-desc').value=item.desc||'';
+  document.getElementById('f-desc').value=descHtmlToPlain(item.desc||'');
   state.descManual=!!item.descManual;
   // ボタンを「更新」に変更
   const addBtn=document.getElementById('add-update-btn');
@@ -3181,6 +3217,8 @@ function resetFormData(keepImages){
   document.getElementById('holes-other-wrap').classList.add('hidden');
   document.getElementById('tire-kind-other-wrap').classList.add('hidden');
   document.getElementById('f-w-inch').value='';
+  document.getElementById('f-w-inch-other').value='';
+  document.getElementById('w-inch-other-wrap').classList.add('hidden');
   state.qty=null; state.tireKinds=[]; state.pcd=null; state.carrier=null; state.size3=null; state.kuchi=null; state.punctureNum=null;
   state.grooves=[]; state.grooveOthers=[]; state.years=[];
   state.editingIdx=null;
@@ -3438,9 +3476,12 @@ async function uploadExtraImagesAndGetLink(item){
 }
 // item.descに仕込まれたDropboxプレースホルダーを実際のURLに差し替え（URLなしの場合はブロック自体を削除）
 function finalizeDescriptionWithDropboxUrl(desc, url){
-  const block=`■ その他：<BR>\n※ 下記リンク先より追加画像を参照できます。<BR>\n<A HREF="${DROPBOX_EXTRA_PLACEHOLDER}">追加画像</A><BR><BR><BR>\n`;
-  if(!desc.includes(block)) return desc;
-  return url ? desc.replace(block, block.replace(DROPBOX_EXTRA_PLACEHOLDER, url)) : desc.replace(block, '');
+  const anchor=`<A HREF="${DROPBOX_EXTRA_PLACEHOLDER}">追加画像</A>`;
+  if(!desc.includes(anchor)) return desc;
+  if(url) return desc.replace(anchor, `<A HREF="${url}">追加画像</A>`);
+  // アップロード失敗時は、その他セクションの見出し文ごと除去して壊れたリンクを残さない（手動編集で前後の文言が変わっていてもアンカー単体は必ず除去する）
+  const block=`■ その他：<BR>\n※ 下記リンク先より追加画像を参照できます。<BR>\n${anchor}<BR><BR><BR>\n`;
+  return desc.includes(block) ? desc.replace(block, '') : desc.replace(anchor, '');
 }
 
 // 一定時間後に自動で消える通知（OKボタンでも即時に閉じられる）
@@ -3696,9 +3737,13 @@ function inchKey(inch){
   const s=String(inch).replace('以下','').replace('以上','');
   return parseFloat(s)||0;
 }
+// ホイールインチが「その他」選択時は自由入力欄の値を実際のインチとして使う
+function resolveWheelInch(fd){
+  return fd.wInch==='その他' ? (fd.wInchOther||'') : (fd.wInch||'');
+}
 function getWheelCatId(item){
   const fd=item.formData||{};
-  const inch=inchKey(fd.wInch||'');
+  const inch=inchKey(resolveWheelInch(fd));
   const holes=fd.sel?.holes||'';
   const wheelKind=fd.sel?.['wheel-kind'];
   const isOem=wheelKind==='純正AW'||wheelKind==='純正SW';
@@ -3793,7 +3838,7 @@ function getSetCatId(item){
   const fd=item.formData||{};
   const kinds=fd.tireKinds||[];
   if(kinds.includes('トラック・ダンプ')) return '2084241156';
-  const inch=inchKey(fd.wInch||'');
+  const inch=inchKey(resolveWheelInch(fd));
   const holes=fd.sel?.holes||'';
   const hk=holes==='4H'?'4':holes==='5H'?'5':holes==='6H'?'6':'x';
   const isStudless=kinds.includes('スタッドレスタイヤ（冬タイヤ）');
