@@ -888,14 +888,8 @@
           <button onclick="sel('wheel-kind','社外AW',this)">社外AW</button>
           <button onclick="sel('wheel-kind','純正SW',this)">純正SW</button>
           <button onclick="sel('wheel-kind','社外SW',this)">社外SW</button>
-          <button onclick="sel('wheel-kind','その他',this)">その他</button>
         </div>
         <div class="err-msg" id="wheel-kind-err">ホイール種類を選択してください</div>
-      </div>
-      <div class="field hidden" id="wheel-kind-other-wrap">
-        <label>ホイール種類（その他）<span class="req">*</span></label>
-        <input type="text" id="f-wheel-kind-other" placeholder="例：メッキホイール" oninput="updatePreview()">
-        <div class="err-msg" id="wheel-kind-other-err">ホイール種類を入力してください</div>
       </div>
       <div class="field">
         <label>ホイールブランド名<span class="req">*</span></label>
@@ -1641,7 +1635,7 @@ function initStickyActionBar(){
 
 function buildWheelInchSelect(){
   const sel = document.getElementById('f-w-inch');
-  const vals = ['12','13','14','15','16','17','18','19','20','21','22','23以上'];
+  const vals = ['12','13','14','15','16','17','17.5','18','19','19.5','20','21','22','23以上'];
   vals.forEach(v=>{ const o=document.createElement('option'); o.value=v; o.textContent=v+'インチ'; sel.appendChild(o); });
 }
 
@@ -1986,7 +1980,7 @@ function makeSelect(id, opts, ph){
 }
 function buildWidths(){ const a=[]; for(let v=135;v<=315;v+=10) a.push({v:String(v),t:v+'mm'}); a.push({v:'その他',t:'その他'}); return a; }
 function buildFlats(){ const a=[{v:'なし',t:'なし（-）'}]; for(let v=25;v<=90;v+=5) a.push({v:String(v),t:String(v)}); return a; }
-function buildInches(){ const a=[]; ['12','12.5','13','14','15','16','17','18','19','20','21','22','22.5'].forEach(v=>a.push({v,t:v+'インチ'})); a.push({v:'その他',t:'その他（自由入力）'}); return a; }
+function buildInches(){ const a=[]; ['12','12.5','13','14','15','16','17','17.5','18','19','19.5','20','21','22','22.5'].forEach(v=>a.push({v,t:v+'インチ'})); a.push({v:'その他',t:'その他（自由入力）'}); return a; }
 // インチ選択が「その他」の場合に自由入力欄を使う（12インチ未満の実サイズを入力するため）
 function getInchVal(prefix,i){ const sel=v(prefix+'-'+i); return sel==='その他' ? v(prefix+'-other-'+i) : sel; }
 function toggleInchOther(prefix,i){
@@ -2081,14 +2075,13 @@ function updatePunctureNumBtns(){
 }
 
 // ===== OEM =====
-// ホイール種類（純正AW/社外AW/純正SW/社外SW/その他）から純正/社外・説明文の表記を導出する
+// ホイール種類（純正AW/社外AW/純正SW/社外SW）から純正/社外・説明文の表記を導出する
 function isWheelOem(){
   const k=state.sel['wheel-kind'];
   return k==='純正AW'||k==='純正SW';
 }
 function getWheelKindLabel(){
   const k=state.sel['wheel-kind'];
-  if(k==='その他') return v('f-wheel-kind-other');
   const map={'純正AW':'純正アルミホイール','社外AW':'社外アルミホイール','純正SW':'純正スチールホイール','社外SW':'社外スチールホイール'};
   return map[k]||'';
 }
@@ -2171,9 +2164,6 @@ function sel(key, val, btn){
   }
   if(key==='holes'){
     document.getElementById('holes-other-wrap').classList.toggle('hidden', val!=='その他');
-  }
-  if(key==='wheel-kind'){
-    document.getElementById('wheel-kind-other-wrap').classList.toggle('hidden', val!=='その他');
   }
   updatePreview(); saveStorage();
 }
@@ -2531,7 +2521,6 @@ function validate(){
   }
   if(t==='wheel'||t==='set'){
     if(!state.sel['wheel-kind']){ showErr('wheel-kind-err'); ok=false; }
-    else if(state.sel['wheel-kind']==='その他'&&!v('f-wheel-kind-other')){ showErr('wheel-kind-other-err'); ok=false; }
     if(!v('f-wheel-brand')){ showErr('wheel-brand-err'); ok=false; }
     if(!v('f-w-inch')){ showErr('w-inch-err'); ok=false; }
     if(!v('f-rim')){ showErr('rim-err'); ok=false; }
@@ -2743,7 +2732,7 @@ function captureFormData(){
     loadIndex:v('f-load-index'), grooveAll:state.grooveAll,
     grooves:[...state.grooves], grooveOthers:[...state.grooveOthers], yearAll:state.yearAll, years:[...state.years],
     tireNote:v('f-tire-note'),
-    wheelBrand:v('f-wheel-brand'), wheelKindOther:v('f-wheel-kind-other'),
+    wheelBrand:v('f-wheel-brand'),
     wInch:v('f-w-inch'), rim:v('f-rim'), hub:v('f-hub'),
     pcd:state.pcd, pcdOther:v('f-pcd-other'),
     offsetSign:state.offsetSign, offset:v('f-offset'),
@@ -2918,8 +2907,6 @@ function applyFormData(fd, { restoreDateAndPrice = true } = {}){
     if(fd.sel['puncture']==='あり') document.getElementById('puncture-num-wrap').classList.remove('hidden');
     if(fd.sel['holes']==='その他') document.getElementById('holes-other-wrap').classList.remove('hidden');
     if(fd.holesOther) document.getElementById('f-holes-other').value=fd.holesOther;
-    if(fd.sel['wheel-kind']==='その他') document.getElementById('wheel-kind-other-wrap').classList.remove('hidden');
-    if(fd.wheelKindOther) document.getElementById('f-wheel-kind-other').value=fd.wheelKindOther;
   }
   // punctureNum
   if(fd.punctureNum){ state.punctureNum=fd.punctureNum; updatePunctureNumBtns(); }
@@ -3157,7 +3144,6 @@ function resetFormData(keepImages){
   // Reset inputs but keep type
   document.getElementById('f-brand').value='';
   document.getElementById('f-wheel-brand').value='';
-  document.getElementById('f-wheel-kind-other').value='';
   document.getElementById('f-maker').value='';
   document.getElementById('f-maker-other').value='';
   document.getElementById('f-rim').value='';
@@ -3179,7 +3165,6 @@ function resetFormData(keepImages){
   document.getElementById('pcd-other-wrap').classList.add('hidden');
   document.getElementById('holes-other-wrap').classList.add('hidden');
   document.getElementById('tire-kind-other-wrap').classList.add('hidden');
-  document.getElementById('wheel-kind-other-wrap').classList.add('hidden');
   document.getElementById('f-w-inch').value='';
   state.qty=null; state.tireKinds=[]; state.pcd=null; state.carrier=null; state.size3=null; state.kuchi=null; state.punctureNum=null;
   state.grooves=[]; state.grooveOthers=[]; state.years=[];
