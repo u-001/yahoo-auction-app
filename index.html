@@ -882,11 +882,20 @@
       <div class="subsec-title" style="font-size:.85rem;font-weight:700;color:var(--text2);margin-bottom:10px;">ホイール情報</div>
 
       <div class="field">
-        <label>純正 / 社外</label>
-        <div class="toggle-row" id="oem-toggle">
-          <button onclick="setOem(true)">純正品</button>
-          <button class="active" onclick="setOem(false)">社外品</button>
+        <label>ホイール種類<span class="req">*</span></label>
+        <div class="btn-group" id="wheel-kind-btns">
+          <button onclick="sel('wheel-kind','純正AW',this)">純正AW</button>
+          <button onclick="sel('wheel-kind','社外AW',this)">社外AW</button>
+          <button onclick="sel('wheel-kind','純正SW',this)">純正SW</button>
+          <button onclick="sel('wheel-kind','社外SW',this)">社外SW</button>
+          <button onclick="sel('wheel-kind','その他',this)">その他</button>
         </div>
+        <div class="err-msg" id="wheel-kind-err">ホイール種類を選択してください</div>
+      </div>
+      <div class="field hidden" id="wheel-kind-other-wrap">
+        <label>ホイール種類（その他）<span class="req">*</span></label>
+        <input type="text" id="f-wheel-kind-other" placeholder="例：メッキホイール" oninput="updatePreview()">
+        <div class="err-msg" id="wheel-kind-other-err">ホイール種類を入力してください</div>
       </div>
       <div class="field">
         <label>ホイールブランド名<span class="req">*</span></label>
@@ -1331,7 +1340,6 @@ let state = {
   sameSize: true,
   grooveAll: true,
   yearAll: true,
-  isOem: false,
   isAuction: true,
   carrier: null,
   size3: null,
@@ -1345,7 +1353,7 @@ let state = {
     siwa:'なし', beat:'なし', air:'実施',
     'w-kizu':'なし', 'w-paint':'なし', 'w-crack':'なし', 'w-bend':'なし',
     'cap-paint':'なし', 'cap-tsume':'なし', 'cap-ware':'なし',
-    holes:null, cond:null, 'cap-carrier':null
+    holes:null, cond:null, 'cap-carrier':null, 'wheel-kind':null
   },
   // per-tire arrays
   grooves: [],
@@ -2073,11 +2081,16 @@ function updatePunctureNumBtns(){
 }
 
 // ===== OEM =====
-function setOem(v){
-  state.isOem=v;
-  const btns=document.querySelectorAll('#oem-toggle button');
-  btns[0].classList.toggle('active',v); btns[1].classList.toggle('active',!v);
-  updatePreview(); saveStorage();
+// ホイール種類（純正AW/社外AW/純正SW/社外SW/その他）から純正/社外・説明文の表記を導出する
+function isWheelOem(){
+  const k=state.sel['wheel-kind'];
+  return k==='純正AW'||k==='純正SW';
+}
+function getWheelKindLabel(){
+  const k=state.sel['wheel-kind'];
+  if(k==='その他') return v('f-wheel-kind-other');
+  const map={'純正AW':'純正アルミホイール','社外AW':'社外アルミホイール','純正SW':'純正スチールホイール','社外SW':'社外スチールホイール'};
+  return map[k]||'';
 }
 
 // ===== PCD =====
@@ -2158,6 +2171,9 @@ function sel(key, val, btn){
   }
   if(key==='holes'){
     document.getElementById('holes-other-wrap').classList.toggle('hidden', val!=='その他');
+  }
+  if(key==='wheel-kind'){
+    document.getElementById('wheel-kind-other-wrap').classList.toggle('hidden', val!=='その他');
   }
   updatePreview(); saveStorage();
 }
@@ -2407,7 +2423,7 @@ function buildDescription(no){
       condBlock+getShippingLine()+otherBlock+footer;
   }
   if(t==='wheel'){
-    const kind=state.isOem?'純正アルミホイール':'社外アルミホイール';
+    const kind=getWheelKindLabel();
     const inch=v('f-w-inch'); const rim=v('f-rim'); const hub=v('f-hub');
     const holes=state.sel['holes']==='その他'? v('f-holes-other') : (state.sel['holes']||'');
     const pcdVal=state.pcd==='その他'? v('f-pcd-other') : (state.pcd||'');
@@ -2431,7 +2447,7 @@ function buildDescription(no){
     const tireDmg=getTireDamage();
     const wheelDmg=getWheelDamage();
     const cond=getStatusWord(); const newOld=isNew()?'新品':'中古';
-    const kind=state.isOem?'純正アルミホイール':'社外アルミホイール';
+    const kind=getWheelKindLabel();
     const inch=v('f-w-inch'); const rim=v('f-rim'); const hub=v('f-hub');
     const holes=state.sel['holes']==='その他'? v('f-holes-other') : (state.sel['holes']||'');
     const pcdVal=state.pcd==='その他'? v('f-pcd-other') : (state.pcd||'');
@@ -2514,6 +2530,8 @@ function validate(){
     if(!state.sel['siwa']){ showErr('siwa-err'); ok=false; }
   }
   if(t==='wheel'||t==='set'){
+    if(!state.sel['wheel-kind']){ showErr('wheel-kind-err'); ok=false; }
+    else if(state.sel['wheel-kind']==='その他'&&!v('f-wheel-kind-other')){ showErr('wheel-kind-other-err'); ok=false; }
     if(!v('f-wheel-brand')){ showErr('wheel-brand-err'); ok=false; }
     if(!v('f-w-inch')){ showErr('w-inch-err'); ok=false; }
     if(!v('f-rim')){ showErr('rim-err'); ok=false; }
@@ -2725,7 +2743,7 @@ function captureFormData(){
     loadIndex:v('f-load-index'), grooveAll:state.grooveAll,
     grooves:[...state.grooves], grooveOthers:[...state.grooveOthers], yearAll:state.yearAll, years:[...state.years],
     tireNote:v('f-tire-note'),
-    isOem:state.isOem, wheelBrand:v('f-wheel-brand'),
+    wheelBrand:v('f-wheel-brand'), wheelKindOther:v('f-wheel-kind-other'),
     wInch:v('f-w-inch'), rim:v('f-rim'), hub:v('f-hub'),
     pcd:state.pcd, pcdOther:v('f-pcd-other'),
     offsetSign:state.offsetSign, offset:v('f-offset'),
@@ -2870,7 +2888,6 @@ function applyFormData(fd, { restoreDateAndPrice = true } = {}){
   if(fd.years){ state.years=fd.years; updateYearInputs(); }
   if(fd.tireNote) document.getElementById('f-tire-note').value=fd.tireNote;
   // wheel
-  if(fd.isOem!==undefined) setOem(fd.isOem);
   if(fd.wheelBrand) document.getElementById('f-wheel-brand').value=fd.wheelBrand;
   if(fd.wInch) document.getElementById('f-w-inch').value=fd.wInch;
   if(fd.rim) document.getElementById('f-rim').value=fd.rim;
@@ -2901,6 +2918,8 @@ function applyFormData(fd, { restoreDateAndPrice = true } = {}){
     if(fd.sel['puncture']==='あり') document.getElementById('puncture-num-wrap').classList.remove('hidden');
     if(fd.sel['holes']==='その他') document.getElementById('holes-other-wrap').classList.remove('hidden');
     if(fd.holesOther) document.getElementById('f-holes-other').value=fd.holesOther;
+    if(fd.sel['wheel-kind']==='その他') document.getElementById('wheel-kind-other-wrap').classList.remove('hidden');
+    if(fd.wheelKindOther) document.getElementById('f-wheel-kind-other').value=fd.wheelKindOther;
   }
   // punctureNum
   if(fd.punctureNum){ state.punctureNum=fd.punctureNum; updatePunctureNumBtns(); }
@@ -3138,6 +3157,7 @@ function resetFormData(keepImages){
   // Reset inputs but keep type
   document.getElementById('f-brand').value='';
   document.getElementById('f-wheel-brand').value='';
+  document.getElementById('f-wheel-kind-other').value='';
   document.getElementById('f-maker').value='';
   document.getElementById('f-maker-other').value='';
   document.getElementById('f-rim').value='';
@@ -3159,10 +3179,11 @@ function resetFormData(keepImages){
   document.getElementById('pcd-other-wrap').classList.add('hidden');
   document.getElementById('holes-other-wrap').classList.add('hidden');
   document.getElementById('tire-kind-other-wrap').classList.add('hidden');
+  document.getElementById('wheel-kind-other-wrap').classList.add('hidden');
   state.qty=null; state.tireKinds=[]; state.pcd=null; state.carrier=null; state.size3=null; state.kuchi=null; state.punctureNum=null;
   state.grooves=[]; state.grooveOthers=[]; state.years=[];
   state.editingIdx=null;
-  state.sel={puncture:'なし',katayori:'なし',nakayori:'なし',hibi:'なし',siwa:'なし',beat:'なし',air:'実施','w-kizu':'なし','w-paint':'なし','w-crack':'なし','w-bend':'なし','cap-paint':'なし','cap-tsume':'なし','cap-ware':'なし',holes:null,cond:null,'cap-carrier':null};
+  state.sel={puncture:'なし',katayori:'なし',nakayori:'なし',hibi:'なし',siwa:'なし',beat:'なし',air:'実施','w-kizu':'なし','w-paint':'なし','w-crack':'なし','w-bend':'なし','cap-paint':'なし','cap-tsume':'なし','cap-ware':'なし',holes:null,cond:null,'cap-carrier':null,'wheel-kind':null};
   // reset button states
   document.querySelectorAll('.btn-group button.selected').forEach(b=>b.classList.remove('selected'));
   // re-apply defaults
@@ -3679,7 +3700,8 @@ function getWheelCatId(item){
   const fd=item.formData||{};
   const inch=inchKey(fd.wInch||'');
   const holes=fd.sel?.holes||'';
-  const isOem=fd.isOem;
+  const wheelKind=fd.sel?.['wheel-kind'];
+  const isOem=wheelKind==='純正AW'||wheelKind==='純正SW';
   // ホイールカテゴリテーブル
   const W={
     '12_4':[2084199051,2084199052],'12_5':[2084008469,2084008469],'12_x':[2084008470,2084008470],
