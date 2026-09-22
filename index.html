@@ -2389,7 +2389,8 @@ function buildDescription(no){
 
   if(t==='tire'){
     const tireKindStr=state.tireKinds.map(k=>k==='その他'?v('f-tire-kind-other'):k).join('・')||'';
-    const sizeStr=state.sameSize? getSize(0) : getSize(0)+' / '+getSize(1);
+    const loadIdx=v('f-load-index');
+    const sizeStr=(state.sameSize? getSize(0) : getSize(0)+' / '+getSize(1))+(loadIdx?' '+loadIdx:'');
     const grooveLines=getGrooveDisplay();
     const yearLines=getYearDisplay();
     const dmg=getTireDamage();
@@ -2423,7 +2424,8 @@ function buildDescription(no){
   }
   if(t==='set'){
     const tireKindStr=state.tireKinds.map(k=>k==='その他'?v('f-tire-kind-other'):k).join('・')||'';
-    const sizeStr=state.sameSize? getSize(0) : getSize(0)+' / '+getSize(1);
+    const loadIdx=v('f-load-index');
+    const sizeStr=(state.sameSize? getSize(0) : getSize(0)+' / '+getSize(1))+(loadIdx?' '+loadIdx:'');
     const grooveLines=getGrooveDisplay();
     const yearLines=getYearDisplay();
     const tireDmg=getTireDamage();
