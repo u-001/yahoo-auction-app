@@ -1937,7 +1937,7 @@ function buildRadialRow(i){
   // struct+inch
   const si=document.createElement('div');
   const structSel=makeSelect('size-st-'+i,[{v:'R',t:'R'},{v:'ZR',t:'ZR'}],''); structSel.onchange=updatePreview;
-  const inchSel=makeSelect('size-i-'+i, buildInches(),'');
+  const inchSel=makeSelect('size-i-'+i, buildInches(),'選択してください');
   const inchOther=makeInchOther('size-i',i);
   inchSel.onchange=()=>{ toggleInchOther('size-i',i); updatePreview(); saveStorage(); };
   si.appendChild(structSel); si.appendChild(inchSel); si.appendChild(inchOther);
@@ -1951,7 +1951,7 @@ function buildOffroadRow(i){
   const h=document.createElement('input'); h.type='number'; h.id='of-h-'+i; h.placeholder='高さ'; h.oninput=updatePreview; h.style.flex='1';
   const sl=document.createElement('span'); sl.textContent='/'; sl.style.color='var(--text2)';
   const st=makeSelect('of-st-'+i,[{v:'R',t:'R'},{v:'ZR',t:'ZR'}],''); st.style.width='50px'; st.onchange=updatePreview;
-  const inch=makeSelect('of-i-'+i, buildInches(),'');
+  const inch=makeSelect('of-i-'+i, buildInches(),'選択してください');
   const inchOther=makeInchOther('of-i',i); inchOther.style.flex='1';
   inch.onchange=()=>{ toggleInchOther('of-i',i); updatePreview(); saveStorage(); };
   row.appendChild(w); row.appendChild(x); row.appendChild(h); row.appendChild(sl); row.appendChild(st); row.appendChild(inch); row.appendChild(inchOther);
@@ -1963,7 +1963,7 @@ function buildBiasRow(i){
   const d=document.createElement('span'); d.textContent='-'; d.style.color='var(--text2)';
   const f=makeSelect('bi-f-'+i, buildFlats(),''); f.onchange=updatePreview;
   const s=makeSelect('bi-st-'+i,[{v:'',t:'構造'}],''); s.onchange=updatePreview;
-  const inch=makeSelect('bi-i-'+i, buildInches(),'');
+  const inch=makeSelect('bi-i-'+i, buildInches(),'選択してください');
   const inchOther=makeInchOther('bi-i',i); inchOther.style.flex='1';
   inch.onchange=()=>{ toggleInchOther('bi-i',i); updatePreview(); saveStorage(); };
   row.appendChild(w); row.appendChild(d); row.appendChild(f); row.appendChild(s); row.appendChild(inch); row.appendChild(inchOther);
