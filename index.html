@@ -1937,7 +1937,7 @@ function buildRadialRow(i){
   // struct+inch
   const si=document.createElement('div');
   const structSel=makeSelect('size-st-'+i,[{v:'R',t:'R'},{v:'ZR',t:'ZR'}],''); structSel.onchange=updatePreview;
-  const inchSel=makeSelect('size-i-'+i, buildInches(),'インチ');
+  const inchSel=makeSelect('size-i-'+i, buildInches(),'');
   const inchOther=makeInchOther('size-i',i);
   inchSel.onchange=()=>{ toggleInchOther('size-i',i); updatePreview(); saveStorage(); };
   si.appendChild(structSel); si.appendChild(inchSel); si.appendChild(inchOther);
