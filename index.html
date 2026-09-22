@@ -1341,6 +1341,7 @@ let state = {
   offsetSign: '+',
   pcd: null,
   tireKinds: [],
+  titleManual: false,
   // single-select fields stored by key
   sel: {
     puncture:'なし', katayori:'なし', nakayori:'なし', hibi:'なし',
@@ -2301,12 +2302,14 @@ function buildTitle(){
 }
 
 function updateTitle(){
+  if(state.titleManual){ updateTitleCounter(); return; }
   const t=buildTitle();
   const el=document.getElementById('f-title');
   el.value=t;
   updateTitleCounter();
 }
-function onTitleInput(){ updateTitleCounter(); }
+// タイトルを手動で編集したら、以後は自動生成で上書きしない（編集し直しても手動修正分を維持するため）
+function onTitleInput(){ state.titleManual=true; saveStorage(); updateTitleCounter(); }
 function updateTitleCounter(){
   const el=document.getElementById('f-title');
   const len=el.value.length;
@@ -2606,7 +2609,7 @@ async function addItem(){
   const typeLabel={'tire':'タイヤのみ','wheel':'ホイールのみ','set':'セット','cap':'キャップ'}[state.type];
   const formData=captureFormData();
   const item={
-    no, order:no, type:state.type, typeLabel, title, desc, formData,
+    no, order:no, type:state.type, typeLabel, title, titleManual:state.titleManual, desc, formData,
     date:v('f-date'),
     startPrice:v('f-start-price'), buynowPrice:v('f-buynow-price'),
     fixedPrice:v('f-fixed-price'),
@@ -2667,6 +2670,7 @@ async function updateItem(){
   showSubmittingOverlay('商品を送信中...');
   const item=state.items[idx];
   item.title=document.getElementById('f-title').value;
+  item.titleManual=state.titleManual;
   item.desc=buildDescription(item.no);
   item.formData=captureFormData();
   item.date=v('f-date');
@@ -2943,6 +2947,7 @@ async function editItem(idx){
   renderImagePreview('main');
   renderImagePreview('additional');
   document.getElementById('f-title').value=item.title;
+  state.titleManual=!!item.titleManual;
   // ボタンを「更新」に変更
   const addBtn=document.getElementById('add-update-btn');
   addBtn.textContent='商品リストを更新';
@@ -2958,6 +2963,7 @@ async function duplicateItem(idx){
   const item=state.items[idx];
   if(!await customConfirm(`No.${String(item.no).padStart(2,'0')} の内容を複製して新規入力を開始します。現在のフォーム入力内容は失われます。よろしいですか？`)) return;
   state.editingIdx=null;
+  state.titleManual=false;
   setType(item.type, true);
   if(item.formData) applyFormData(item.formData);
   state.mainImages=[];
@@ -3161,6 +3167,7 @@ function resetFormData(keepImages){
   document.getElementById('f-buynow-price').value='';
   document.getElementById('f-fixed-price').value='';
   document.getElementById('f-title').value='';
+  state.titleManual=false;
   document.getElementById('maker-other-wrap').classList.add('hidden');
   document.getElementById('pcd-other-wrap').classList.add('hidden');
   document.getElementById('holes-other-wrap').classList.add('hidden');
